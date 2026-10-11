@@ -1,0 +1,23 @@
+import {test,expect} from './authenticated-test';
+import {comparedPlans} from './replan-responses';
+test('managed fields, split equipment details and monthly task controls',async({page})=>{
+ await page.route('**/api/parcels?*',r=>r.fulfill({json:{status:'EMPTY'}}));
+ await page.route('**/api/replanning',r=>r.fulfill({json:r.request().postDataJSON().action==='compare'?comparedPlans(r.request().postDataJSON()):{status:'FEASIBLE',phase:'GAPS_ONLY',proposalId:'00000000-0000-4000-8000-000000000001',warnings:[],diff:[{id:'test',before:0,after:32,date:'2026-01-02'}]}}));
+ await page.goto('/');await page.getByRole('button',{name:'농지',exact:true}).first().click();
+ await expect(page.getByTestId('ops-fields')).toBeVisible();
+ await expect(page.getByText('샘플 농지 등록',{exact:true})).toHaveCount(0);
+ await expect(page.getByText('참고 지번 선택',{exact:true})).toHaveCount(0);
+ await expect(page.getByTestId('ops-fields').locator('tbody tr')).toHaveCount(30);
+ await page.getByRole('button',{name:'장비',exact:true}).first().click();
+ await expect(page.getByText('장비 상세정보',{exact:true})).toHaveCount(16);
+ await expect(page.getByText('작업로그',{exact:true})).toHaveCount(16);
+ await page.getByRole('button',{name:'일정표',exact:true}).first().click();
+ await page.getByRole('button',{name:'9월',exact:true}).click();
+ await expect(page.locator('[data-testid^="schedule-day-2026-01"]')).toHaveCount(0);
+ await expect(page.getByText('연간 계획 · 일자 미정',{exact:true})).toHaveCount(0);
+ const day=page.getByTestId('schedule-day-2026-09-09');await day.locator('summary').click();await day.getByRole('button',{name:'관리',exact:true}).first().click();
+ const manager=page.getByRole('region',{name:'작업 관리'});await manager.getByLabel('변경 희망일 (비우면 자동 지정)').fill('2026-09-10');await manager.getByLabel('변경 사유',{exact:true}).fill('일정 조정');
+ await manager.getByRole('button',{name:'변경 대안 비교'}).click();await manager.getByRole('button',{name:'빈자리만 사용 · 선택',exact:true}).click();
+ await expect(manager.getByRole('button',{name:/변경계획 일괄 승인/})).toBeEnabled();
+ await page.screenshot({path:'test-results/operator-cleanup.png'});
+});

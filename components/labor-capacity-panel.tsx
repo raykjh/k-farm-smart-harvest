@@ -1,0 +1,35 @@
+'use client';
+import {useEffect,useState} from 'react';
+import type {LaborCapacityWindow} from '@/lib/labor-capacity';
+import {Button} from './ui/button';
+import {useLanguage} from './language';
+type Data={centerId:string;canManage:boolean;rosterVersion:number;workers:{id:string;name:string;workCodes:string[]}[];neighbors:{id:string;name:string}[];windows:(LaborCapacityWindow&{version:number;bookings:{id:string;label:string;date:string}[]})[];notices:{date:string;event:string;workerName:string}[]};
+const time=(m:number)=>`${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+const minute=(s:string)=>Number(s.split(':')[0])*60+Number(s.split(':')[1]);
+export default function LaborCapacityPanel(){
+ const {locale}=useLanguage(),t=(ko:string,en:string)=>locale==='ko'?ko:en;
+ const [data,setData]=useState<Data|null>(null),[error,setError]=useState(''),[busy,setBusy]=useState(false),[person,setPerson]=useState(''),[center,setCenter]=useState(''),[date,setDate]=useState(''),[from,setFrom]=useState('08:00'),[until,setUntil]=useState('16:00'),[travel,setTravel]=useState(''),[consent,setConsent]=useState(false),[response,setResponse]=useState('PHONE'),[reason,setReason]=useState('');
+ async function load(){const r=await fetch('/api/labor-capacity',{cache:'no-store'}),d=await r.json();if(!r.ok)throw Error(d.error);setData(d)}
+ useEffect(()=>{void load().catch(e=>setError(String(e)))},[]);
+ async function run(body:object){setBusy(true);setError('');try{const r=await fetch('/api/labor-capacity',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...body,requestId:crypto.randomUUID()})}),d=await r.json();if(!r.ok)throw Error(d.error);await load();window.dispatchEvent(new Event('kfarm-labor-updated'));setConsent(false)}catch(e){setError(e instanceof Error?e.message:String(e))}finally{setBusy(false)}}
+ const worker=data?.workers.find(w=>w.id===person),status=(s:string)=>({OFFERED:t('수용 센터 확인 대기','Awaiting receiving center'),CONFIRMED:t('지원시간 확정','Support window confirmed'),CANCELLED:t('취소','Cancelled'),WITHDRAWN:t('지원 철회 · 재계획 대상','Withdrawn / replan required')})[s]??s;
+ return <details className="card section-space" data-testid="labor-capacity"><summary>{t('인접센터 인력 지원시간 예약','Reserve adjacent-center labor capacity')}</summary>
+  <p>{t('작업 계획을 만들기 전에 지원 가능한 시간을 확보합니다. 양쪽 센터 확인 후 보내는 센터의 가용 인원에서 제외하고 받는 센터의 배차 계산에 반영합니다. 구체적인 작업의 참석은 아래 인력 지원에서 별도 확인합니다.','Reserve support before creating work plans. Confirmation removes this availability from the owner and makes it available to the receiving scheduler. Attendance for the specific task is confirmed separately below.')}</p>
+  {error&&<p role="alert">{error}</p>}
+  {data&&<>{data.canManage&&<fieldset className="registration-grid" disabled={busy} onChange={()=>setConsent(false)}>
+   <label>{t('지원 희망자','Support volunteer')}<select value={person} onChange={e=>setPerson(e.target.value)}><option value="">—</option>{data.workers.map(w=><option key={w.id} value={w.id}>{w.name}</option>)}</select></label>
+   <label>{t('지원받는 인접센터','Receiving adjacent center')}<select value={center} onChange={e=>setCenter(e.target.value)}><option value="">—</option>{data.neighbors.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
+   <label>{t('지원일','Support date')}<input type="date" value={date} onChange={e=>setDate(e.target.value)}/></label>
+   <label>{t('편도 이동시간 (분·15분 단위)','One-way travel (15-minute units)')}<input type="number" min={0} max={120} step={15} value={travel} onChange={e=>setTravel(e.target.value)}/></label>
+   <label>{t('출발 가능 시각','Available departure')}<input type="time" step={900} value={from} onChange={e=>setFrom(e.target.value)}/></label>
+   <label>{t('복귀 완료 시각','Return by')}<input type="time" step={900} value={until} onChange={e=>setUntil(e.target.value)}/></label>
+   <label>{t('가능 작업','Permitted work')}<input readOnly value={worker?.workCodes.join(', ')??''}/></label>
+   <label>{t('동의 확인 방법','Consent confirmation')}<select value={response} onChange={e=>setResponse(e.target.value)}><option value="PHONE">{t('전화','Phone')}</option><option value="APP">{t('앱','App')}</option></select></label>
+  </fieldset>}
+  {data.canManage&&<div className="registration-grid"><label>{t('제안·확정·취소 사유','Proposal / confirmation / cancellation reason')}<input maxLength={500} value={reason} onChange={e=>{setReason(e.target.value);setConsent(false)}}/></label><label><input type="checkbox" checked={consent} onChange={e=>setConsent(e.target.checked)}/>{t('해당 날짜·시간·인접센터 지원과 이름 공유에 본인이 동의했습니다.','The volunteer agreed to this date, time, neighboring center and name sharing.')}</label><Button disabled={busy||!worker||!center||!date||!from||!until||travel===''||!consent||reason.trim().length<3} onClick={()=>worker&&run({action:'offer',rosterVersion:data.rosterVersion,window:{borrowerCenterId:center,workerId:worker.id,date,startMinute:minute(from),endMinute:minute(until),travelMinutes:Number(travel),workCodes:worker.workCodes,response,consent:true,reason}})}>{t('지원시간 제안','Offer support window')}</Button></div>}
+  <div className="table-wrap"><table><thead><tr>{[t('희망자','Volunteer'),t('지원일·시간','Date / time'),t('방향','Direction'),t('상태·연결 작업','Status / linked work'),t('관리','Manage')].map(h=><th key={h}>{h}</th>)}</tr></thead><tbody>{data.windows.map(w=><tr key={w.id}><td>{w.workerName}</td><td>{w.date}<br/>{time(w.startMinute+w.travelMinutes)}–{time(w.endMinute-w.travelMinutes)}</td><td>{w.ownerCenterId===data.centerId?t('지원 보냄','Outbound'):t('지원 받음','Inbound')}</td><td>{status(w.status)}{w.bookings.map(b=><p key={b.id}>{b.date} · {b.label} · {t('작업 참석 확인','Confirm task attendance')}</p>)}</td><td>{data.canManage&&!['CANCELLED','WITHDRAWN'].includes(w.status)&&<>{w.status==='OFFERED'&&w.borrowerCenterId===data.centerId&&<Button size="sm" disabled={busy||reason.trim().length<3} onClick={()=>run({action:'confirm',id:w.id,version:w.version,reason})}>{t('지원시간 확정','Confirm window')}</Button>}<Button size="sm" variant="outline" disabled={busy||reason.trim().length<3||!!w.bookings.length} onClick={()=>run({action:'cancel',id:w.id,version:w.version,reason})}>{t('예약 취소','Cancel window')}</Button>{w.status==='CONFIRMED'&&<Button size="sm" variant="outline" disabled={busy||reason.trim().length<3} onClick={()=>{if(window.confirm(t('지원 철회를 기록할까요? 연결 작업은 그대로 보존하고 대체 인력·재계획 대상으로 전환합니다.','Record withdrawal? Preserve linked work and flag it for staffing recovery and replanning.')))void run({action:'withdraw',id:w.id,version:w.version,reason})}}>{t('지원 철회 기록','Record withdrawal')}</Button>}</>}</td></tr>)}</tbody></table></div>
+  {!data.windows.length&&<p>{t('등록된 인력 지원시간이 없습니다.','No labor support windows registered.')}</p>}
+  <details><summary>{t('지원시간·계획 변경 안내','Capacity and plan-change notices')}</summary>{data.notices.map((n,i)=><p key={i}>{n.date} · {n.workerName} · {n.event==='PLAN_CHANGED'?t('작업 변경 · 참석 재확인','Work changed / reconfirm attendance'):status(n.event)}</p>)}</details></>}
+  <Button variant="outline" disabled={busy} onClick={()=>void load().catch(e=>setError(String(e)))}>{t('지원시간 새로고침','Refresh capacity')}</Button>
+ </details>;
+}

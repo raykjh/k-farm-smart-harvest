@@ -1,0 +1,20 @@
+import {test,expect} from './authenticated-test';
+test('test consultation persists, rejects stale saves, remains workspace scoped',async({page,request})=>{
+ await page.goto('/register?workspace=sandbox');
+ await page.getByLabel('이름',{exact:true}).fill('자동검증 상담');
+ await page.getByLabel('생년월일',{exact:true}).fill('1960-01-01');
+ await page.getByLabel('연락처',{exact:true}).fill('000-0000-0000');
+ await expect(page.getByRole('button',{name:'상담 DB 저장',exact:true})).toBeDisabled();
+ await page.getByLabel('테스트 정보만 입력했으며 로컬 DB 저장을 확인합니다.').check();
+ const response=page.waitForResponse(r=>r.url().includes('/api/consultations')&&r.request().method()==='POST');
+ await page.getByRole('button',{name:'상담 DB 저장',exact:true}).click();
+ const saved=await (await response).json();expect(saved.version).toBe(1);
+ await page.goto(`/register?workspace=sandbox&consultation=${saved.id}`);
+ await expect(page.getByLabel('이름',{exact:true})).toHaveValue('자동검증 상담');
+ const record=await (await request.get(`/api/consultations?workspace=sandbox&id=${saved.id}`)).json();
+ const body={workspace:'sandbox',id:saved.id,version:0,testDataOnly:true,payload:record.payload};
+ expect((await request.post('/api/consultations',{data:body})).status()).toBe(409);
+ expect((await request.get(`/api/consultations?workspace=operations&id=${saved.id}`)).status()).toBe(200);
+ expect((await request.post('/api/consultations',{data:{...body,version:1,testDataOnly:false}})).status()).toBe(400);
+ expect((await request.get(`/api/consultations?workspace=sandbox&id=${saved.id}`,{headers:{origin:'https://invalid.example'}})).status()).toBe(403);
+});

@@ -1,0 +1,41 @@
+import {test,expect} from '@playwright/test';
+import {randomBytes,randomUUID} from 'node:crypto';
+import {db} from '../lib/db';
+import {centerRegistry,emptyCenter} from '../lib/center-registry';
+import {installCenterDemo} from '../lib/center-demo-fixture';
+import {authKey,digest} from '../lib/auth';
+test.skip(process.env.KFARM_CENTERS_E2E!=='1','Isolated center DB only');
+test('new-center operating settings persist through real UI and remain center-scoped',async({browser},info)=>{
+ test.setTimeout(90000);
+ if(process.env.DATABASE_URL!=='postgresql://kfarm:kfarm_local_demo@127.0.0.1:55432/kfarm_centers_e2e')throw Error('Dedicated DB required');
+ await db.$transaction(async tx=>{await tx.outbox.deleteMany();await tx.receipt.deleteMany();await tx.audit.deleteMany();await tx.workRecord.deleteMany();await tx.center.deleteMany();for(const c of centerRegistry)await tx.center.create({data:{id:c.id,state:JSON.parse(JSON.stringify(emptyCenter(c.id)))}});
+  await installCenterDemo(tx,'janggye',{name:'장계면',code:'52740335',longitude:127.61,latitude:35.71,geometry:{type:'Polygon',coordinates:[]},sourceUrl:'https://www.vworld.kr',fetchedAt:new Date().toISOString()});
+  await tx.workRecord.create({data:{workspace:'shared',kind:'climateNormals',id:'e2e-normals',version:1,payload:{stationName:'검증 관측소',period:'격리 데이터',values:Array.from({length:7},(_,i)=>({monthDay:'05-'+String(i+1).padStart(2,'0'),meanC:20})),sourceUrl:'https://data.kma.go.kr'}}});
+ });
+ const token=randomBytes(32).toString('hex'),id=randomUUID();await db.workRecord.create({data:{...authKey('user',id),payload:{id,name:'장계 설정 검증',username:'e2e-settings',role:'CENTER_ADMIN',centerId:'janggye',enabled:true,passwordHash:'NO_LOGIN'}}});await db.workRecord.create({data:{...authKey('session',digest(token)),payload:{userId:id,expiresAt:Date.now()+3600000}}});
+ const context=await browser.newContext({extraHTTPHeaders:{origin:'http://127.0.0.1:3100'}});context.setDefaultTimeout(15000);await context.addCookies([{name:'kfarm_session',value:token,domain:'127.0.0.1',path:'/'}]);const page=await context.newPage();
+ const otherBefore=await db.center.findUnique({where:{id:'demo'}}),paidCalls=await db.aiCall.count();
+ try{
+  await page.goto('http://127.0.0.1:3100/settings');await expect(page.getByRole('heading',{name:'장계면 농업지원센터',exact:true})).toBeVisible();await expect(page.getByRole('navigation',{name:'주 메뉴'})).toBeVisible();await expect(page.getByTestId('workspace-status')).toContainText('데모데이터');
+  await expect(page.getByLabel('동시 투입 가능 작업인원 (명)',{exact:true})).toHaveValue('6');
+  const baseline=await (await context.request.get('http://127.0.0.1:3100/api/center-settings')).json();
+  await page.getByLabel('동시 투입 가능 작업인원 (명)',{exact:true}).fill('7');await page.getByRole('button',{name:'자원 기준 저장',exact:true}).click();await expect(page.getByRole('status').filter({hasText:'저장했습니다.'})).toBeVisible();await page.reload();await expect(page.getByLabel('동시 투입 가능 작업인원 (명)',{exact:true})).toHaveValue('7');
+  const stale=await context.request.post('http://127.0.0.1:3100/api/center-settings',{data:{action:'capacity',version:baseline.version,settingsVersion:baseline.settingsVersion,staffCount:9,transportCount:2,evidence:{basis:'격리 입력',checkedOn:'2026-10-02'}}});expect(stale.status()).toBe(409);
+  await page.getByLabel('예보 격자 X',{exact:true}).fill('80');await page.getByLabel('예보 격자 Y',{exact:true}).fill('70');await page.getByRole('button',{name:'위치 기준 저장',exact:true}).click();await expect(page.getByRole('status').filter({hasText:'저장했습니다.'})).toBeVisible();
+  await page.getByRole('combobox',{name:'적용 관측자료',exact:true}).selectOption('e2e-normals');const climateSection=page.locator('section').filter({has:page.getByRole('heading',{name:'기후 평년자료',exact:true})});await climateSection.getByLabel('확인 근거',{exact:true}).fill('격리된 검증 자료');await page.getByRole('button',{name:'평년자료 연결 저장',exact:true}).click();await expect(page.getByRole('status').filter({hasText:'저장했습니다.'})).toBeVisible();
+  const anchors=await context.request.get('http://127.0.0.1:3100/api/climate-anchors?year=2027');expect(anchors.ok()).toBe(true);expect((await anchors.json()).station).toBe('검증 관측소');
+  await page.getByRole('button',{name:'기준 저장',exact:true}).click();await expect(page.getByRole('status').filter({hasText:'기준을 저장하고'})).toBeVisible();
+  const saved=await (await context.request.get('http://127.0.0.1:3100/api/center-settings?centerId=demo')).json();expect(saved.center.id).toBe('janggye');expect(saved.settings.location).toMatchObject({nx:80,ny:70});expect(saved.resources).toHaveLength(16);
+  const operators=page.getByTestId('operator-roster');await operators.getByRole('button',{name:'운영자 추가',exact:true}).click();
+  await operators.getByLabel('운영자 이름',{exact:true}).fill('홍운영');
+  await operators.getByLabel('자격·교육·근무표 확인 근거',{exact:true}).fill('격리 화면 검증용 근무표');
+  await operators.getByRole('button',{name:'운영자 명단·근무표 저장',exact:true}).click();await expect(page.getByRole('status').filter({hasText:'저장했습니다.'})).toBeVisible();
+  await page.reload();await expect(page.getByTestId('operator-roster')).toContainText('홍운영');
+  const roster=await (await context.request.get('http://127.0.0.1:3100/api/center-settings')).json();expect(roster.operatorRoster[0]).toMatchObject({name:'홍운영',kinds:['TR'],startMinute:480,endMinute:960});
+  await page.screenshot({path:info.outputPath('center-settings.png'),fullPage:true});
+  await page.getByRole('navigation',{name:'주 메뉴'}).getByRole('button',{name:'농지',exact:true}).click();await expect(page.getByTestId('field-map')).toHaveAttribute('aria-label','장계면');
+  expect(await db.center.findUnique({where:{id:'demo'}})).toEqual(otherBefore);expect(await db.aiCall.count()).toBe(paidCalls);
+  await db.workRecord.update({where:{workspace_kind_id:authKey('user',id)},data:{payload:{id,name:'장계 설정 검증',username:'e2e-settings',role:'CENTER_STAFF',centerId:'janggye',enabled:true,passwordHash:'NO_LOGIN'}}});
+  const forbidden=await context.request.post('http://127.0.0.1:3100/api/center-settings',{data:{action:'capacity'}});expect(forbidden.status()).toBe(403);
+ }finally{await context.close().catch(()=>{})}
+});

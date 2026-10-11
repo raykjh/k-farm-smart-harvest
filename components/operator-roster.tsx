@@ -1,0 +1,32 @@
+'use client';
+import {useEffect,useState} from 'react';
+import type {NamedOperator} from '@/lib/named-operators';
+import {equipmentTypes} from '@/lib/equipment-register';
+import {useLanguage} from './language';
+import {Button} from './ui/button';
+
+export type OperatorBooking={id:string;date:string;startMinute:number;durationMinutes:number;task:string;machineId:string|null;operatorIds:string[]};
+const time=(n:number)=>`${String(Math.floor(n/60)).padStart(2,'0')}:${String(n%60).padStart(2,'0')}`;
+const minute=(s:string)=>{const [h,m]=s.split(':').map(Number);return h*60+m};
+export default function OperatorRoster({roster,bookings,disabled,save}:{roster:NamedOperator[]|null;bookings:OperatorBooking[];disabled:boolean;save:(body:object)=>Promise<void>}){
+ const {locale}=useLanguage(),t=(ko:string,en:string)=>locale==='ko'?ko:en;
+ const [people,setPeople]=useState<NamedOperator[]>(roster??[]),[editing,setEditing]=useState<string|null>(null);
+ const [excludedInput,setExcludedInput]=useState<Record<string,string>>({});
+ useEffect(()=>{setPeople(roster??[]);setEditing(null);setExcludedInput({})},[roster]);
+ const update=(id:string,p:Partial<NamedOperator>)=>setPeople(rows=>rows.map(r=>r.id===id?{...r,...p}:r));
+ function add(){const from=new Date(Date.now()+9*3600000).toISOString().slice(0,10),id=crypto.randomUUID();setPeople(p=>[...p,{id,name:'',active:true,kinds:['TR'],weekdays:[1,2,3,4,5],from,until:(Number(from.slice(0,4))+1)+'-12-31',excludedDates:[],startMinute:480,endMinute:960,evidence:''}]);setEditing(id)}
+ return <section className="card section-space" data-testid="operator-roster"><div className="card-head"><h2>{t('장비 운영자·근무표','Machine operators and shifts')}</h2><Button variant="outline" disabled={disabled||people.length>=100} onClick={add}>{t('운영자 추가','Add operator')}</Button></div>
+ <p className="description">{t('일반 농업인력과 별도입니다. 확인한 장비 종류·근무시간으로 최초 배차와 일정변경을 계산합니다. 차용 장비도 본 센터 운영자를 배정하며, 다른 센터 인력은 자동 차용하지 않습니다.','Separate from general farm labor. Reviewed equipment skills and shifts constrain initial dispatch and replanning. Borrowed equipment uses this center’s operators; personnel are not automatically borrowed.')}</p>
+ {roster===null&&<p>{t('개인 명단 미등록 · 현재는 인원 수 기준으로만 계산합니다.','No named roster: only pooled headcounts are currently enforced.')}</p>}
+ <form onSubmit={e=>{e.preventDefault();void save({action:'operators',operators:people})}}><fieldset disabled={disabled}>
+ <div className="table-wrap"><table><thead><tr>{[t('이름','Name'),t('담당 장비','Equipment skills'),t('근무시간','Shift'),t('상태','Status'),t('관리','Manage')].map(s=><th key={s}>{s}</th>)}</tr></thead><tbody>{people.map(p=><tr key={p.id}><td>{p.name||t('신규 운영자','New operator')}</td><td>{p.kinds.join(' · ')}</td><td>{time(p.startMinute)}–{time(p.endMinute)}</td><td>{p.active?t('활동','Active'):t('중지','Inactive')}</td><td><Button type="button" variant="outline" onClick={()=>setEditing(editing===p.id?null:p.id)}>{t('수정','Edit')}</Button></td></tr>)}</tbody></table></div>
+ {people.filter(p=>p.id===editing).map(p=><section className="section-space" key={p.id}><div className="registration-grid"><label>{t('운영자 이름','Operator name')}<input value={p.name} required maxLength={60} onChange={e=>update(p.id,{name:e.target.value})}/></label><label>{t('활동 상태','Active status')}<select value={String(p.active)} onChange={e=>update(p.id,{active:e.target.value==='true'})}><option value="true">{t('활동','Active')}</option><option value="false">{t('중지','Inactive')}</option></select></label><label>{t('근무 시작일','Available from')}<input type="date" required value={p.from} onChange={e=>update(p.id,{from:e.target.value})}/></label><label>{t('근무 종료일','Available until')}<input type="date" required min={p.from} value={p.until} onChange={e=>update(p.id,{until:e.target.value})}/></label><label>{t('근무 시작시간','Shift starts')}<input type="time" step={900} min="08:00" max="15:45" required value={time(p.startMinute)} onChange={e=>update(p.id,{startMinute:minute(e.target.value)})}/></label><label>{t('근무 종료시간','Shift ends')}<input type="time" step={900} min="08:15" max="16:00" required value={time(p.endMinute)} onChange={e=>update(p.id,{endMinute:minute(e.target.value)})}/></label></div>
+ <fieldset><legend>{t('가능 요일','Available weekdays')}</legend><div className="actions">{(locale==='ko'?['일','월','화','수','목','금','토']:['Sun','Mon','Tue','Wed','Thu','Fri','Sat']).map((day,i)=><label key={day}><input type="checkbox" checked={p.weekdays.includes(i)} onChange={e=>update(p.id,{weekdays:e.target.checked?[...p.weekdays,i]:p.weekdays.filter(d=>d!==i)})}/>{day}</label>)}</div></fieldset>
+ <fieldset><legend>{t('운용 가능한 장비 종류','Reviewed equipment skills')}</legend><div className="registration-grid">{equipmentTypes.map(([code,ko,en])=><label key={code}><input type="checkbox" checked={p.kinds.includes(code)} onChange={e=>update(p.id,{kinds:e.target.checked?[...p.kinds,code]:p.kinds.filter(k=>k!==code)})}/>{t(ko,en)} ({code})</label>)}</div></fieldset>
+ <label>{t('제외일 (YYYY-MM-DD, 쉼표로 구분)','Excluded dates (YYYY-MM-DD, comma-separated)')}<input value={excludedInput[p.id]??p.excludedDates.join(',')} onChange={e=>{setExcludedInput(v=>({...v,[p.id]:e.target.value}));update(p.id,{excludedDates:e.target.value.split(',').map(s=>s.trim()).filter(Boolean)})}}/></label><label>{t('자격·교육·근무표 확인 근거','Qualification, training and shift evidence')}<input required minLength={3} maxLength={1000} value={p.evidence} onChange={e=>update(p.id,{evidence:e.target.value})}/></label>
+ </section>)}
+ <p className="description">{t('명단 저장 시 기존 작업의 날짜·장비는 유지하고 운영자 배정 가능 여부를 확인합니다. 기존 배정과 충돌하면 저장하지 않습니다. 자격 적법성을 자동 인증하거나 작업 시작을 승인하는 기능은 아닙니다.','Saving preserves booked dates and machines and checks operator availability. Conflicting changes are rejected. This does not certify legal qualifications or authorize execution.')}</p>
+ <Button type="submit" disabled={disabled||roster===null&&!people.length}>{t('운영자 명단·근무표 저장','Save operator roster')}</Button></fieldset></form>
+ {!!bookings.length&&<details className="section-space"><summary>{t('확정 운영자 배정','Approved operator assignments')} · {bookings.length}</summary><div className="table-wrap"><table><thead><tr>{[t('일시','Date / time'),t('작업','Task'),t('장비','Equipment'),t('운영자','Operator')].map(s=><th key={s}>{s}</th>)}</tr></thead><tbody>{bookings.map(b=><tr key={b.id}><td>{b.date} {time(b.startMinute)}</td><td>{b.task}</td><td>{b.machineId}</td><td>{b.operatorIds.map(id=>roster?.find(p=>p.id===id)?.name??id).join(', ')}</td></tr>)}</tbody></table></div></details>}
+ </section>;
+}

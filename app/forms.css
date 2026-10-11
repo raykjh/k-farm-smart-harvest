@@ -1,0 +1,23 @@
+.document-page{max-width:1100px!important;margin:0 auto!important;padding:28px 24px 64px!important}
+.document-page .document-top{display:flex;justify-content:space-between;align-items:center;gap:18px;margin-bottom:22px}
+.document-page .document-top h1{font-size:25px;letter-spacing:-.7px}.document-page .document-top p{font-size:13px;color:#65746c;margin-top:6px}
+.document-page button{font:inherit;border:1px solid #b9c9bf;border-radius:6px;background:white;padding:10px 16px;min-height:42px;font-weight:600}
+.document-page button:hover:not(:disabled){background:#eff5f1}.document-page button:disabled{opacity:.42}.document-page button.primary{background:#245c45;color:white;border-color:#245c45}
+.document-page .paper-sheet{width:100%;max-width:794px;min-height:700px;margin:24px auto 32px;padding:40px;background:white;border:1px solid #cbd3ce;border-radius:2px;box-shadow:0 8px 28px #203e3010}
+.paper-heading{text-align:center;border-bottom:3px solid #324e40;padding:4px 0 24px;margin-bottom:24px}.paper-heading small{display:block;font-size:11px;letter-spacing:2px;color:#65766d;margin-bottom:14px}.paper-heading h2{font-size:27px;letter-spacing:2px}.paper-meta{display:flex;justify-content:space-between;font-size:12px;color:#64756b;margin-top:20px}
+.paper-section-title{font-size:15px;font-weight:700;padding:12px 0 8px;margin-top:12px}
+.paper-grid{display:grid;grid-template-columns:1fr 1fr;border-top:1px solid #bfcac3;border-left:1px solid #bfcac3}
+.paper-grid label{display:grid;grid-template-columns:105px minmax(0,1fr);gap:0;align-items:stretch;border-right:1px solid #bfcac3;border-bottom:1px solid #bfcac3;min-height:64px;min-width:0;font-size:14px}
+.paper-grid label>span{background:#f0f3f0;display:flex;align-items:center;padding:12px;font-weight:600}.paper-grid label.wide{grid-column:1/-1}.paper-grid input,.paper-grid select,.paper-grid textarea{border:0;border-radius:0;width:100%;min-width:0;padding:14px;font-size:16px;background:#fff;color:#233b32}.paper-grid input:focus,.paper-grid select:focus,.paper-grid textarea:focus{outline:2px solid #39835c;outline-offset:-2px}.paper-grid textarea{resize:vertical;min-height:82px;font-family:inherit}
+.paper-footer{margin-top:28px;padding-top:16px;border-top:1px solid #cbd3ce;display:flex;align-items:center;justify-content:space-between;gap:16px;font-size:13px}.paper-note{color:#65766d;font-size:12px;line-height:1.8;margin-top:20px}
+.document-page .card:not(.paper-sheet){margin:20px 0;padding:24px;border-radius:8px}.document-page .card>h2{margin-bottom:16px}.document-page .card>label{margin:12px 0}.document-page .card>button{margin:12px 8px 0 0}.document-page details{padding:12px 0}.document-page summary{cursor:pointer;font-weight:600}.document-page .document-tools{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0}.document-page .registration-grid{gap:0;border-top:1px solid #c5cfc8;border-left:1px solid #c5cfc8}.document-page .registration-grid>label{padding:12px;border-right:1px solid #c5cfc8;border-bottom:1px solid #c5cfc8;background:#fafbf9}.document-page .registration-grid input,.document-page .registration-grid select{border-radius:3px}
+.paper-print{display:none}
+@media(max-width:650px){.document-page{padding:18px 12px!important}.document-page .paper-sheet{padding:22px 16px;min-height:0}.paper-grid{grid-template-columns:1fr}.paper-grid label{grid-template-columns:100px minmax(0,1fr)}.document-page .document-top{align-items:flex-start;flex-direction:column}.paper-heading h2{font-size:22px}.paper-meta,.paper-footer{flex-wrap:wrap;gap:12px}}
+@media print{
+ @page{size:A4;margin:16mm}
+ body:has(>.paper-print){background:white;color:black}
+ body:has(>.paper-print)>*:not(.paper-print){display:none!important}
+ .paper-print{display:block!important;font-family:'Malgun Gothic',sans-serif;font-size:11pt;color:black}
+ .paper-print header{text-align:center;border-bottom:2px solid black;padding-bottom:8mm;margin-bottom:8mm}.paper-print h1{font-size:22pt;margin:4mm 0}.paper-print header p{font-size:9pt}.paper-print h2{font-size:12pt;margin:6mm 0 2mm;break-after:avoid}.paper-print dl{margin:0}.paper-print dl>div{display:grid;grid-template-columns:35mm 1fr;border-bottom:1px solid #aaa;break-inside:avoid}.paper-print dt,.paper-print dd{margin:0;padding:3mm;overflow-wrap:anywhere;white-space:pre-wrap}.paper-print dt{font-weight:bold;border-right:1px solid #aaa}.paper-print footer{font-size:9pt;border-top:1px solid #aaa;margin-top:8mm;padding-top:3mm}
+}
+.document-page details.paper-sheet:not([open]){min-height:0;padding:20px 28px}

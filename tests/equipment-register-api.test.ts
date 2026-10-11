@@ -1,0 +1,31 @@
+import {it,expect,beforeAll,afterAll} from 'vitest';
+import {NextRequest} from 'next/server';
+import {db} from '../lib/db';
+import {testSession} from './auth-fixture';
+import {registeredDemo} from './registered-demo-fixture';
+import {POST} from '../app/api/equipment/route';
+let session:Awaited<ReturnType<typeof testSession>>;
+beforeAll(async()=>{if(!process.env.DATABASE_URL?.endsWith('/kfarm_test'))throw Error('isolated test DB required');session=await testSession()});
+afterAll(async()=>{await session?.cleanup()});
+it('persists a new ledger item, rejects stale edits, preserves work and code',async()=>{
+ const state=registeredDemo().state;await db.center.upsert({where:{id:'demo'},create:{id:'demo',state:state as any},update:{state:state as any}});
+ const call=(body:any)=>POST(new NextRequest('http://127.0.0.1:3100/api/equipment',{method:'POST',headers:session.headers,body:JSON.stringify(body)}));
+ const equipment={id:'JB23DR03',name:'드론 검증',kind:'DR',status:'UNKNOWN',capacityHaHour:2,manufacturer:'검증',model:'model',product:'',purchasedOn:'',servicePhone:'',notes:''};
+ expect((await call({version:state.planVersion,equipment})).status).toBe(200);
+ const saved=(await db.center.findUniqueOrThrow({where:{id:'demo'}})).state as any;expect(saved.missions).toEqual(state.missions);expect(saved.machines.at(-1)).toMatchObject({id:equipment.id,ownerCenterId:'demo',ledger:{model:'model'}});
+ expect((await call({version:state.planVersion,equipment,existingId:equipment.id})).status).toBe(409);
+ expect((await call({version:saved.planVersion,equipment:{...equipment,id:'JB23DR04'},existingId:equipment.id})).status).toBe(409);
+ expect((await call({version:saved.planVersion,equipment:{...equipment,model:'updated'},existingId:equipment.id})).status).toBe(200);
+});
+it('assigns codes under the write lock and rejects a concurrent stale registration',async()=>{
+ const state=registeredDemo().state;await db.center.update({where:{id:'demo'},data:{state:state as any}});
+ const equipment={id:'JB23DR99',name:'자동번호 검증',kind:'DR',status:'UNKNOWN',capacityHaHour:2,manufacturer:'',model:'',product:'',purchasedOn:'',servicePhone:'',notes:''};
+ const call=(version:number)=>POST(new NextRequest('http://127.0.0.1:3100/api/equipment',{method:'POST',headers:session.headers,body:JSON.stringify({version,autoCode:true,equipment})}));
+ const responses=await Promise.all([call(state.planVersion),call(state.planVersion)]);
+ expect(responses.map(r=>r.status).sort()).toEqual([200,409]);
+ expect(await responses.find(r=>r.status===200)!.json()).toMatchObject({id:'JB23DR03'});
+ const saved=(await db.center.findUniqueOrThrow({where:{id:'demo'}})).state as any;
+ expect(saved.machines.filter((m:any)=>m.id==='JB23DR03')).toHaveLength(1);
+ expect(saved.missions).toEqual(state.missions);
+ const next=await call(saved.planVersion);expect(next.status).toBe(200);expect(await next.json()).toMatchObject({id:'JB23DR04'});
+});

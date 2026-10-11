@@ -1,0 +1,42 @@
+node_modules/
+.next/
+# Keep real environment files private; the example must contain placeholders only.
+.env
+.env.*
+!.env.example
+# Operational records, backups, recovery material, and local scratch files.
+.data/
+.local/
+# Provider samples are obtained separately, not relicensed with the source.
+lib/demo-parcels.json
+data/capacity/four-center-cadastre-2026-10-03.json
+data/capacity/four-center-study-2026.json
+.venv/
+__pycache__/
+.pytest_cache/
+test-results*/
+playwright-report/
+blob-report/
+coverage/
+*.tsbuildinfo
+*.log
+# Do not exclude *.sql: source-controlled Prisma migrations must remain publishable.
+*.dump
+*.backup
+*.sqlite
+*.sqlite3
+*.sqlite-*
+*.db
+*.db-*
+*.pem
+*.key
+*.p12
+*.pfx
+# Only current public documentation is included in the reviewed source release.
+AI-BUDGET-V2.md
+/docs/*
+!/docs/ai-cost-controls.md
+!/docs/clean-installation.md
+!/docs/farmland-policy-rationale-2026-10-08.md
+!/docs/public-source-and-data.md
+!/docs/verification.md

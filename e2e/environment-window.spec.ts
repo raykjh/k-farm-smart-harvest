@@ -1,0 +1,22 @@
+import {test,expect} from './authenticated-test';
+test('common condition editor calculates using stored station normals without changing schedules',async({page,request})=>{
+ await page.goto('/crop-standards');
+ await expect(page.getByRole('combobox',{name:'적용 범위',exact:true})).toHaveValue('COMMON');
+ await page.getByRole('button',{name:'작업 추가',exact:true}).click();
+ await expect(page.getByRole('combobox',{name:'일정 산출 방식',exact:true})).toHaveValue('ENVIRONMENT');
+ await page.getByLabel('조건 하한 (℃)',{exact:true}).fill('15');
+ await page.getByLabel('연속 충족 일수',{exact:true}).fill('3');
+ await page.getByText('지역 기상자료로 기간 계산',{exact:true}).click();
+ await page.getByLabel('계산 연도',{exact:true}).fill('2026');
+ const response=page.waitForResponse(r=>r.url().endsWith('/api/environment-windows')&&r.request().method()==='POST');
+ await page.getByRole('button',{name:'조건 충족 기간 계산',exact:true}).click();
+ const result=await (await response).json();expect(result.automaticScheduling).toBe(false);expect(result.availableDays).toBeGreaterThan(0);expect(result.basis).toBe('NORMAL');expect(result.windows.length).toBeGreaterThan(0);
+ await expect(page.getByText('평년 기온 기반 후보 · 올해 예보 아님',{exact:false})).toBeVisible();
+ await page.getByRole('combobox',{name:'온도 지표',exact:true}).selectOption('soilTemperatureC');
+ await page.getByRole('button',{name:'조건 충족 기간 계산',exact:true}).click();
+ await expect(page.getByText('필수 기상자료 부족 · 날짜 미확정',{exact:true})).toBeVisible();
+ await page.screenshot({path:'test-results/environment-editor.png',fullPage:true});
+ const data=await (await request.get('/api/environment-windows')).json();
+ const observed=await request.post('/api/environment-windows',{headers:{origin:'http://127.0.0.1:3100'},data:{datasetId:data.datasets[0].id,year:2026,basis:'OBSERVED',rule:{metric:'meanTemperatureC',lowerC:15,upperC:null,consecutiveDays:3,minimumNightC:null}}});
+ expect(observed.status()).toBe(200);expect((await observed.json()).basis).toBe('OBSERVED');
+});

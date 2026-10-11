@@ -1,0 +1,69 @@
+generator client {
+  provider = "prisma-client-js"
+}
+datasource db {
+  provider = "postgresql"
+  url = env("DATABASE_URL")
+}
+// First slice: versioned aggregate, atomically locked per center.
+// Missions/fields/resources are typed inside state; outbox is independently claimable.
+model Center {
+  id String @id
+  version Int @default(0)
+  state Json
+  updatedAt DateTime @updatedAt
+}
+model WorkRecord {
+  workspace String
+  kind String
+  id String
+  version Int @default(1)
+  payload Json
+  updatedAt DateTime @default(now())
+  @@id([workspace, kind, id])
+}
+model Outbox {
+  id String @id
+  centerId String
+  farmerId String
+  planVersion Int
+  body String
+  status String @default("PENDING")
+  acknowledgement String @default("NOT_REQUIRED")
+  attempts Int @default(0)
+  availableAt DateTime @default(now())
+  sentAt DateTime?
+  createdAt DateTime @default(now())
+  @@index([status, availableAt])
+}
+model Receipt {
+  id String @id
+  operation String
+  result Json
+  createdAt DateTime @default(now())
+}
+model Audit {
+  id String @id @default(cuid())
+  centerId String
+  action String
+  detail Json
+  createdAt DateTime @default(now())
+}
+// Micro-USD reservations, intentionally independent of demo Center resets.
+model AiBudget {
+  id String @id
+  total Int @default(0)
+  daily Int @default(0)
+  day DateTime @db.Date
+}
+// No API keys, prompts or model output in accounting records. Estimates, not invoices.
+model AiCall {
+  id String @id
+  model String
+  reservedMicroUsd Int
+  status String @default("RESERVED_OR_UNKNOWN")
+  promptTokens Int?
+  completionTokens Int?
+  estimatedMicroUsd Int?
+  createdAt DateTime @default(now())
+}

@@ -1,0 +1,65 @@
+import assert from 'node:assert/strict';
+// Intentionally isolated, repeatable destructive setup of test records only.
+process.env.DATABASE_URL='postgresql://kfarm:kfarm_local_demo@127.0.0.1:55432/kfarm_test';
+process.env.AI_MODE='demo';
+const {db}=await import('../lib/db');
+const {registeredDemo}=await import('../tests/registered-demo-fixture');
+const {NextRequest}=await import('next/server');
+const consultations=await import('../app/api/consultations/route');
+const fields=await import('../app/api/fields/route');
+const cycles=await import('../app/api/cultivations/route');
+const dispatch=await import('../app/api/annual-dispatch/route');
+const replan=await import('../app/api/replanning/route');
+const {deliver}=await import('../lib/service');
+const {todayKst}=await import('../lib/annual-replanning');
+const base='http://127.0.0.1:3100',today=todayKst(),date=(n:number)=>new Date(Date.parse(today)+n*86400000).toISOString().slice(0,10);
+const request=(path:string,body?:unknown)=>new NextRequest(base+path,{method:body?'POST':'GET',headers:{host:'127.0.0.1:3100',origin:base,'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});
+const checked=async(response:Promise<Response>)=>{const r=await response,data=await r.json();assert.equal(r.status,200,JSON.stringify(data));return data;};
+try{
+ assert.ok(process.env.DATABASE_URL.endsWith('/kfarm_test'));
+ const demo=registeredDemo(),state=structuredClone(demo.state);state.fields=[];state.missions=[];state.events=[];state.revisions=[];
+ await db.$executeRaw`DELETE FROM "WorkRecord" WHERE workspace='sandbox' AND kind IN ('fields','consultation','cultivation','cultivationPlan','annualReservation','annualDispatchApproval','taskExecutionAssessment')`;
+ await db.center.upsert({where:{id:'demo'},create:{id:'demo',state:state as any},update:{state:state as any}});
+ let fieldVersion=0,total=0;
+ for(let i=0;i<30;i++){
+  const c=demo.consultations[i],id=crypto.randomUUID(),f={...demo.fields[i],consultationId:id};
+  await checked(consultations.POST(request('/api/consultations',{workspace:'sandbox',id,version:0,testDataOnly:true,payload:c.payload})));
+  const savedFields=await checked(fields.POST(request('/api/fields',{workspace:'sandbox',version:fieldVersion,mode:'append',payload:[f]})));fieldVersion=savedFields.version;
+  const before=(await db.center.findUniqueOrThrow({where:{id:'demo'}})).state as any;
+  const cultivationId=crypto.randomUUID(),common={from:date(1),to:date(20),laborMinutesPer1000m2:1,setupMinutes:0,windLimitMs:12};
+  const operations:any={seed:common,soil:{...common,machineCode:'TR'},plant:common};
+  if(f.crop==='rice')operations.nursery=common;
+  const late=f.crop==='rice'?'establish':'care';
+  operations[late]={...common,from:date(25),to:date(29),machineCode:f.crop==='pepper'?'DR':'TR',windLimitMs:f.crop==='pepper'?5:12};
+  await checked(cycles.POST(request('/api/cultivations',{cultivation:{id:cultivationId,pnu:f.pnu,crop:f.crop,start:today,end:date(60),source:'REGISTERED'},context:{region:'격리 검증용 가정',operations:{[f.crop]:operations}}})));
+  const preview=await checked(dispatch.GET(request('/api/annual-dispatch?cultivationId='+cultivationId)));
+  assert.ok(preview.assignments.length>=4,JSON.stringify(preview.pending));
+  await checked(dispatch.POST(request('/api/annual-dispatch',{cultivationId,token:preview.token,demoAcknowledged:true})));
+  const after=(await db.center.findUniqueOrThrow({where:{id:'demo'}})).state as any;
+  for(const m of before.missions)assert.deepEqual(after.missions.find((x:any)=>x.id===m.id),m,'기존 일정 변경');
+  assert.equal(after.fields.length,i+1);assert.equal(after.fields.find((x:any)=>x.id===f.pnu).farmerId,id);
+  assert.ok(after.missions.filter((m:any)=>m.cultivationId===cultivationId).length>=4);
+  total=after.missions.length;
+ }
+ console.log(JSON.stringify({stage:'sequential-registration',farmers:30,fields:30,cultivations:30,scheduledTasks:total,existingSchedulesPreserved:true,assumptions:'synthetic dates/productivity, not agricultural advice'}));
+ const before=(await db.center.findUniqueOrThrow({where:{id:'demo'}})).state as any;
+ const drone=before.missions.find((m:any)=>m.resourceId?.includes('DR'));
+ assert.ok(drone);
+ const wind=await checked(replan.POST(request('/api/replanning',{action:'preview',ids:[drone.id],day:drone.scheduledDate,simulation:{kind:'WIND',from:drone.scheduledDate,to:drone.scheduledDate}})));
+ assert.equal(wind.status,'FEASIBLE',JSON.stringify(wind));assert.ok(wind.diff.length>0);
+ assert.ok(wind.diff.every((d:any)=>before.missions.find((m:any)=>m.id===d.id).resourceId.includes('DR')),'영향 없는 지상 작업 변경');
+ await checked(replan.POST(request('/api/replanning',{action:'approve',proposalId:wind.proposalId})));
+ assert.equal((await checked(replan.POST(request('/api/replanning',{action:'approve',proposalId:wind.proposalId})))).alreadyApplied,true);
+ await deliver();const notices=await db.outbox.findMany({where:{id:{startsWith:'replan:'+wind.proposalId+':'}}});assert.ok(notices.length>0&&notices.every(n=>n.status==='DELIVERED'));
+ console.log(JSON.stringify({stage:'wind-approval',changes:wind.diff.length,groundUnchanged:true,mockNotices:notices.length,duplicateSafe:true}));
+ const normal=(await db.center.findUniqueOrThrow({where:{id:'demo'}})).state as any;
+ const ground=normal.missions.find((m:any)=>m.resourceId?.includes('TR')&&m.scheduledDate>=date(25));
+ const broken=structuredClone(normal);broken.machines.find((m:any)=>m.id===ground.resourceId).status='MAINTENANCE';
+ await db.center.update({where:{id:'demo'},data:{state:broken}});
+ const failure=await checked(replan.POST(request('/api/replanning',{action:'preview',ids:[ground.id],preferred:ground.scheduledDate})));assert.equal(failure.status,'NO_FEASIBLE_PLAN');
+ await db.center.update({where:{id:'demo'},data:{state:normal}});
+ const preferred=new Date(Date.parse(ground.scheduledDate)+86400000).toISOString().slice(0,10);
+ const delayed=await checked(replan.POST(request('/api/replanning',{action:'preview',ids:[ground.id],preferred})));assert.equal(delayed.status,'FEASIBLE',JSON.stringify(delayed));
+ await checked(replan.POST(request('/api/replanning',{action:'approve',proposalId:delayed.proposalId})));await deliver();
+ console.log(JSON.stringify({stage:'breakdown-delay',unsafeMachineBlocked:true,automaticReplacement:false,delayChanges:delayed.diff.length,delayApproved:true,database:'kfarm_test',paidAI:false}));
+}finally{await db.$disconnect()}

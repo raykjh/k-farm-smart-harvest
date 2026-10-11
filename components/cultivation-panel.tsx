@@ -1,0 +1,29 @@
+'use client';
+import {cropCodes,cropDisplayNames,isLegacyCrop,type SupportedCropCode} from '@/lib/crop-registry';
+import CultivationChange from './cultivation-change';
+import {useEffect,useState} from 'react';
+import {useLanguage} from './language';
+import type {FieldEntry} from '@/lib/field-record';
+import RegionalContextEditor from './regional-context-editor';
+import type {GuidelineContext} from '@/lib/crop-guidelines';
+import type {Cultivation} from '@/lib/cultivation';
+export default function CultivationPanel({onSaved}:{onSaved?:()=>Promise<void>}){
+ const {locale}=useLanguage(),t=(a:string,b:string)=>locale==='ko'?a:b;
+ const [fields,setFields]=useState<FieldEntry[]>([]),[items,setItems]=useState<Cultivation[]>([]),[pnu,setPnu]=useState(''),[crop,setCrop]=useState('rice'),[start,setStart]=useState(''),[end,setEnd]=useState(''),[plant,setPlant]=useState(''),[previousId,setPrevious]=useState(''),[message,setMessage]=useState(''),[busy,setBusy]=useState(false),[preview,setPreview]=useState<any>(null);
+ const [context,setContext]=useState<GuidelineContext>({region:'계북면'});
+ const usesPlantingAnchor=isLegacyCrop(crop)&&!context.catalog;
+ async function read(){const [f,c]=await Promise.all([fetch('/api/fields').then(r=>r.json()),fetch('/api/cultivations').then(r=>r.json())]);setFields(f.payload??[]);setItems((c.items??[]).map((r:any)=>r.payload));}
+ useEffect(()=>{void read().catch(()=>setMessage(t('재배 목록 조회 실패','Could not load cultivations')))},[]);
+ async function create(){setBusy(true);setPreview(null);try{const r=await fetch('/api/cultivations',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cultivation:{id:crypto.randomUUID(),pnu,crop,start,end,...(previousId?{previousId}:{}),source:'REGISTERED'},context:{...context,region:context.regionalProfile?.region??fields.find(f=>f.pnu===pnu)?.conditions?.region??context.region,anchors:usesPlantingAnchor&&plant?{[crop]:{planting:plant}}:{}}})});const d=await r.json();if(!r.ok)throw Error(d.error);await read();setMessage(t('재배 건과 계획 초안을 저장했습니다. 미확인 작업 조건은 배차 전 보완해야 합니다.','Cultivation and draft saved. Missing work conditions require review before scheduling.'))}catch(e){setMessage(String(e))}finally{setBusy(false)}}
+ async function calculate(id:string){setBusy(true);try{const r=await fetch('/api/annual-dispatch?cultivationId='+id),d=await r.json();if(!r.ok)throw Error(d.error);setPreview(d);setMessage('')}catch(e){setMessage(String(e))}finally{setBusy(false)}}
+ async function approve(){if(!preview)return;setBusy(true);try{const r=await fetch('/api/annual-dispatch',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cultivationId:preview.cultivationId,token:preview.token,demoAcknowledged:true})}),d=await r.json();if(!r.ok)throw Error(d.error);setPreview(null);setMessage(t('잠정 배차를 저장했습니다. 실제 장비·문자는 실행하지 않았습니다.','Provisional assignments saved. No real equipment or SMS was activated.'));await onSaved?.()}catch(e){setMessage(String(e))}finally{setBusy(false)}}
+ return <details className="card section-space"><summary>{t('재배 건 관리','Cultivations')} · {items.length}</summary><p>{t('달력 연도와 별개로 한 농지의 재배 기간을 등록합니다.','Register cultivation periods independently of calendar years.')}</p><div className="actions">
+ <label>{t('농지','Field')}<select value={pnu} disabled={busy} onChange={e=>{setPnu(e.target.value);setPrevious('');setPlant('');setPreview(null);const f=fields.find(f=>f.pnu===e.target.value);setContext({region:f?.conditions?.region??''});if(f?.crop)setCrop(f.crop)}}><option value="">{t('농지 선택','Select field')}</option>{fields.map(f=><option key={f.pnu} value={f.pnu}>{f.address}</option>)}</select></label>
+ <label>{t('작물','Crop')}<select value={crop} disabled={busy} onChange={e=>{setCrop(e.target.value);setPlant('');setPreview(null);setContext({region:context.region});}}>{cropCodes.map(v=><option key={v} value={v}>{cropDisplayNames(locale==='ko')[v]}</option>)}</select></label>
+ <label>{t('재배 시작','Period start')}<input type="date" value={start} onChange={e=>setStart(e.target.value)}/></label><label>{t('정리 완료 예정','Expected period end')}<input type="date" value={end} onChange={e=>setEnd(e.target.value)}/></label>{usesPlantingAnchor&&<label>{t('파종·정식 기준일(선택)','Planting anchor (optional)')}<input type="date" value={plant} onChange={e=>setPlant(e.target.value)}/></label>}
+ <label>{t('이전 재배 연결','Previous cultivation')}<select value={previousId} onChange={e=>setPrevious(e.target.value)}><option value="">{t('없음','None')}</option>{items.filter(c=>c.pnu===pnu).map(c=><option key={c.id} value={c.id}>{c.start} ~ {c.end} · {cropDisplayNames(locale==='ko')[c.crop]}</option>)}</select></label><button disabled={busy||!pnu||!start||!end} onClick={create}>{t('재배 등록','Register cultivation')}</button></div>
+ <RegionalContextEditor crop={crop as SupportedCropCode} value={context} onChange={setContext}/>
+ {message&&<p role="status">{message}</p>}{items.filter(c=>!pnu||c.pnu===pnu).map(c=><div key={c.id}><p>{fields.find(f=>f.pnu===c.pnu)?.address??c.pnu} · {cropDisplayNames(locale==='ko')[c.crop]} · {c.start} ~ {c.end} {c.source==='LEGACY_IMPORT'?t('(기존 작업 범위로 이관)','(imported task period)'):<button disabled={busy} onClick={()=>calculate(c.id)}>{t('배차 검토','Preview dispatch')}</button>}</p><CultivationChange id={c.id} crop={c.crop} area={fields.find(f=>f.pnu===c.pnu)?.area??0} onSaved={async()=>{setPreview(null);await read();await onSaved?.()}}/></div>)}
+ {preview&&<><p>{t('배차 후보','Assignments')} {preview.assignments.length} · {t('확인 대기','Pending')} {preview.pending.length}</p><details><summary>{t('확인 대기 사유','Pending reasons')}</summary>{preview.pending.map((p:any)=><p key={p.id}>{p.reason}</p>)}</details><button disabled={busy||!preview.assignments.length} onClick={()=>{if(confirm(t('잠정 배차를 일괄 저장할까요? 실제 장비·문자는 실행하지 않습니다.','Save provisional assignments? No real equipment or SMS.')))void approve()}}>{t('잠정 배차 저장','Save provisional dispatch')}</button></>}
+ </details>;
+}

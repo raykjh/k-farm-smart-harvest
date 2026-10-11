@@ -1,0 +1,71 @@
+import {it,expect,vi} from 'vitest';
+import {NextRequest} from 'next/server';
+import {randomUUID} from 'node:crypto';
+import {db} from '../lib/db';
+import {testSession} from './auth-fixture';
+import {catalogContext,catalogField,catalogState} from './catalog-fixtures';
+import {POST as register} from '../app/api/registrations/route';
+import {GET as preview,POST as approve} from '../app/api/annual-dispatch/route';
+import {POST as change} from '../app/api/cultivation-change/route';
+import {studyCenterIds} from '../lib/capacity-study-input';
+import {centerDefinition} from '../lib/center-registry';
+import {syntheticCadastre as cadastre} from './synthetic-cadastre';
+import {GET as laborView} from '../app/api/labor-operations/route';
+import {cropNames} from '../lib/crop-registry';
+import * as engine from '../lib/scheduling-engine';
+import {calculateCurrentSchedule} from './current-solver';
+
+it.each(studyCenterIds.flatMap(centerId=>(['lettuce','soybean'] as const).map(crop=>({centerId,crop}))))('$centerId / $crop: synthetic parcel + applicant uses real registration, harvest, approval, reservations, labor and notices; area changes retain completed work',async({centerId,crop})=>{
+ if(!process.env.DATABASE_URL?.endsWith('/kfarm_test'))throw Error('isolated DB only');
+ const solver=vi.spyOn(engine,'solveSchedule').mockImplementation(calculateCurrentSchedule);
+ const workspace=centerId==='demo'?'sandbox':'center:'+centerId,region=centerDefinition(centerId).township;
+ const session=await testSession('CENTER_ADMIN',centerId),id=randomUUID(),contact=randomUUID(),requestId=randomUUID(),field=catalogField(crop,2000);
+ const parcel=cadastre.parcels.find(p=>p.centerId===centerId)!;field.pnu=parcel.pnu;field.address=parcel.address;field.conditions!.region=region;
+ const records=await db.workRecord.findMany(),audits=await db.audit.findMany({select:{id:true}}),oldCenter=await db.center.findUnique({where:{id:centerId}});
+ const req=(path:string,body:unknown)=>new NextRequest(`http://127.0.0.1:3100/api/${path}`,{method:'POST',headers:session.headers,body:JSON.stringify(body)});
+ const f={id:randomUUID(),pnu:field.pnu,address:field.address,area:'2000',crop,conditions:field.conditions,mode:'delegated',tenure:'owned',ownerName:'',ownerPhone:'',evidence:'none',end:'',callAt:'',operator:'',callResult:'pending',scope:'',verified:'pending'};
+ const context={...catalogContext(),region},body={requestId,consultationId:contact,consultationVersion:0,fieldVersion:0,testDataOnly:true,consultation:{farmer:{name:'홍작물',birth:'1960-01-01',phone:'000-0000-0000',contact:'sms'},fields:[f],consent:true,step:3},cultivations:[{cultivation:{id,pnu:field.pnu,crop,start:'2034-01-01',end:'2034-12-31',source:'REGISTERED'},context}]};
+ try{
+  const s=catalogState();s.crewCapacity={operators:4,workers:8};s.machines=s.machines.map(m=>({...m,id:centerId.toUpperCase()+m.id,ownerCenterId:centerId}));
+  s.operatorRoster=[{id:randomUUID(),name:'홍운영',active:true,kinds:['TR','SE','GC','DR','SP','RD'],weekdays:[0,1,2,3,4,5,6],from:'2034-01-01',until:'2034-12-31',excludedDates:[],startMinute:480,endMinute:960,evidence:'격리 검증용 운용·근무표'}];
+  await db.center.upsert({where:{id:centerId},create:{id:centerId,state:JSON.parse(JSON.stringify(s))},update:{state:JSON.parse(JSON.stringify(s))}});
+  await db.workRecord.deleteMany({where:{workspace,kind:'fields',id:'current'}});
+  const registration=await register(req('registrations',body));expect(registration.status,await registration.clone().text()).toBe(200);
+  expect((await(await register(req('registrations',body))).json()).alreadyApplied).toBe(true);
+  const p=await preview(new NextRequest(`http://127.0.0.1:3100/api/annual-dispatch?cultivationId=${id}`,{headers:session.headers}));expect(p.status,await p.clone().text()).toBe(200);const d=await p.json();
+  expect(d.feasibility.every((r:any)=>r.status==='CAPACITY_FEASIBLE'),JSON.stringify(d)).toBe(true);
+  expect(d.assignments.filter((a:any)=>a.operationKey.includes(':harvest'))).toHaveLength(crop==='lettuce'?6:1);
+  const decision={cultivationId:id,token:d.token,demoAcknowledged:true},approved=await approve(req('annual-dispatch',decision));expect(approved.status,await approved.clone().text()).toBe(200);
+  expect((await(await approve(req('annual-dispatch',decision))).json()).alreadyApplied).toBe(true);
+  expect(await db.outbox.count({where:{farmerId:contact}})).toBe(1);
+  expect(await db.workRecord.count({where:{workspace:'shared',kind:'resourceReservation',id:{contains:id}}})).toBeGreaterThan(0);
+  const rows=await db.workRecord.findMany({where:{workspace,kind:'laborDemand',id:{contains:id}}});expect(rows.some(r=>(r.payload as any).owner==='센터 인력'&&(r.payload as any).people===(crop==='lettuce'?3:2))).toBe(true);
+  const labor=await(await laborView(new NextRequest('http://127.0.0.1:3100/api/labor-operations',{headers:session.headers}))).json();
+  const harvestDemand=labor.demands.find((r:any)=>r.missionId.includes(id)&&r.workCode==='harvest');expect(harvestDemand?.count).toBe(crop==='lettuce'?3:1);
+  const state=(await db.center.findUniqueOrThrow({where:{id:centerId}})).state as any;
+  expect(state.missions.every((m:any)=>m.crop===cropNames[crop])).toBe(true);expect(state.missions.filter((m:any)=>m.resourceId).every((m:any)=>m.compatibilityCrop===crop)).toBe(true);
+  expect(state.missions.filter((m:any)=>m.resourceId).every((m:any)=>m.operatorIds?.[0]===s.operatorRoster![0].id)).toBe(true);
+  state.missions[0].status='COMPLETED';const completed=structuredClone(state.missions[0]);await db.center.update({where:{id:centerId},data:{state}});
+  const alteration={id,crop,area:4000,action:'preview'},reviewResponse=await change(req('cultivation-change',alteration));expect(reviewResponse.status,await reviewResponse.clone().text()).toBe(200);const review=await reviewResponse.json();
+  expect(review.blockers,JSON.stringify(review)).toEqual([]);expect(review.impact.preserved).toHaveLength(1);
+  const ids=review.dispatch.assignments.map((a:any)=>a.taskId);expect(new Set(ids).size).toBe(ids.length);
+  expect(review.dispatch.assignments.filter((a:any)=>a.operationKey.includes(':harvest'))).toHaveLength(crop==='lettuce'?9:1);
+  expect(review.dispatch.assignments.some((a:any)=>a.operationKey===completed.operationKey+':part2')).toBe(true);
+  const revised=await change(req('cultivation-change',{...alteration,action:'approve',token:review.token,review:{cost:'격리 검증 비용 검토',consent:'격리 검증 동의'}}));expect(revised.status,await revised.clone().text()).toBe(200);
+  const final=(await db.center.findUniqueOrThrow({where:{id:centerId}})).state as any;expect(final.missions.find((m:any)=>m.id===completed.id)).toEqual(completed);expect(new Set(final.missions.map((m:any)=>m.id)).size).toBe(final.missions.length);
+  const planRecord=await db.workRecord.findUniqueOrThrow({where:{workspace_kind_id:{workspace,kind:'cultivationPlan',id}}});
+  const soil=(planRecord.payload as any).plots[0].tasks.filter((t:any)=>t.operationCode==='soil');
+  expect(soil).toHaveLength(2);expect(soil.map((t:any)=>t.workAreaM2)).toEqual([2000,2000]);
+  expect(await db.outbox.count({where:{farmerId:contact}})).toBe(2);
+ }finally{
+  solver.mockRestore();
+  await db.outbox.deleteMany({where:{farmerId:contact}});
+  // Restore only the disposable test DB, including any previously present rows.
+  const prior=new Set(records.map(r=>JSON.stringify([r.workspace,r.kind,r.id]))),added=(await db.workRecord.findMany({select:{workspace:true,kind:true,id:true}})).filter(r=>!prior.has(JSON.stringify([r.workspace,r.kind,r.id])));
+  if(added.length)await db.workRecord.deleteMany({where:{OR:added}});
+  for(const record of records.filter(r=>r.workspace===workspace&&['fields','laborOperations'].includes(r.kind)))await db.workRecord.upsert({where:{workspace_kind_id:{workspace:record.workspace,kind:record.kind,id:record.id}},create:{...record,payload:record.payload as any},update:{payload:record.payload as any,version:record.version,updatedAt:record.updatedAt}});
+  const priorAudits=new Set(audits.map(r=>r.id)),addedAudits=(await db.audit.findMany({select:{id:true}})).filter(r=>!priorAudits.has(r.id));if(addedAudits.length)await db.audit.deleteMany({where:{id:{in:addedAudits.map(r=>r.id)}}});
+  if(oldCenter)await db.center.update({where:{id:centerId},data:{state:oldCenter.state as any,version:oldCenter.version}});else await db.center.delete({where:{id:centerId}});
+  await session.cleanup();
+ }
+},60000);

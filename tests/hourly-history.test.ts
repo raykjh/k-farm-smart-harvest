@@ -1,0 +1,10 @@
+import {it,expect} from 'vitest';
+import {simulateHourlyTask,type HourObservation} from '../lib/work-history';
+import type {Mission} from '../lib/types';
+const m={scheduledDate:'2026-06-15',start:0,duration:4,windLimitMs:5} as Mission;
+const rows:HourObservation[]=[8,9].map(h=>({observedAt:`2026-06-15T0${h}:00:00+09:00`,temperatureC:20,windMs:1,precipitationMm:0,quality:{temperature:'0',wind:'0',precipitation:'0'}}));
+it('records simulated completion separately from reality',()=>expect(simulateHourlyTask(m,rows,'2026-09-10').status).toBe('SIMULATED_COMPLETED'));
+it('uses blank rain as dry for demo only without mutating the source',()=>{const input=rows.map(r=>({...r,precipitationMm:null}));expect(simulateHourlyTask(m,input,'2026-09-10').status).toBe('SIMULATED_COMPLETED');expect(input[0].precipitationMm).toBeNull()});
+it('rejects flagged blank rain and missing wind',()=>{expect(simulateHourlyTask(m,rows.map(r=>({...r,precipitationMm:null,quality:{...r.quality,precipitation:'9'}})),'2026-09-10').status).toBe('NEEDS_OBSERVATION');expect(simulateHourlyTask(m,rows.map(r=>({...r,windMs:null})),'2026-09-10').status).toBe('NEEDS_OBSERVATION')});
+it('holds configured wind violations',()=>expect(simulateHourlyTask(m,rows.map(r=>({...r,windMs:6})),'2026-09-10').status).toBe('SIMULATED_HELD'));
+it('rejects missing hours and invalid QC',()=>{expect(simulateHourlyTask(m,rows.slice(0,1),'2026-09-10').status).toBe('NEEDS_OBSERVATION');expect(simulateHourlyTask(m,rows.map(r=>({...r,quality:{...r.quality,wind:'9'}})),'2026-09-10').status).toBe('NEEDS_OBSERVATION')});

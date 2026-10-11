@@ -1,0 +1,22 @@
+import {describe,it,expect} from 'vitest';
+import {cropReferences,estimateProduction,emptyLedger,replaceContribution,bucketKey,supplySignal,type Contribution,type SupplyThreshold} from '../lib/crop-reference';
+import {syncProduction,readProduction} from '../lib/production';
+import {initialState} from '../lib/seed';
+import {recommend} from '../lib/recommend';
+const ref=cropReferences[0];
+const entry=(id='A'):Contribution=>({id,referenceId:ref.id,referenceVersion:ref.version,commodity:ref.commodity,period:{year:2027},areaM2:1000,kg:estimateProduction(1000,ref),source:'REGISTERED'});
+const threshold:SupplyThreshold={commodity:ref.commodity,period:{year:2027},kg:1000,unit:'kg',geography:'KR',sourceUrl:'https://example.org/test-fixture',validUntil:'2028-01-01',basis:'DERIVED_REFERENCE',method:'TEST FIXTURE ONLY'};
+const now=new Date('2027-01-01');
+describe('stored crop reference and conservative concentration policy',()=>{
+ it('uses square metres and kg per 1000 square metres',()=>{expect(estimateProduction(3000,ref)).toEqual({low:1542,high:1590});expect(()=>estimateProduction(-1,ref)).toThrow();expect(()=>estimateProduction(NaN,ref)).toThrow()});
+ it('stores all three sources and leaves unverified targets/dates/staff null',()=>{expect(cropReferences).toHaveLength(3);for(const r of cropReferences){expect(r.sourceUrl).toMatch(/^https:/);expect(r.supplyThreshold).toBeNull();expect(r.operations.every(o=>o.window===null&&o.staff===null)).toBe(true)}});
+ it('replacing an area subtracts its previous contribution without duplication',()=>{let l=replaceContribution(emptyLedger(),'A',entry());const old=l;l=replaceContribution(l,'A',{...entry(),areaM2:2000,kg:estimateProduction(2000,ref)});expect(l.totals[bucketKey(entry())]).toEqual({low:1028,high:1060});expect(old.totals[bucketKey(entry())]).toEqual({low:514,high:530});expect(replaceContribution(l,'A',l.entries.A)).toBe(l)});
+ it('moves periods and removes cancelled fields',()=>{let l=replaceContribution(emptyLedger(),'A',entry());l=replaceContribution(l,'A',{...entry(),period:{year:2027,quarter:3}});expect(l.totals[bucketKey(entry())]).toEqual({low:0,high:0});l=replaceContribution(l,'A',null);expect(Object.keys(l.entries)).toHaveLength(0);expect(Object.values(l.totals).every(t=>t.high===0)).toBe(true)});
+ it('does not mix synthetic and actual registered output',()=>{let l=replaceContribution(emptyLedger(),'A',entry());l=replaceContribution(l,'B',{...entry('B'),source:'DEMO_ASSUMPTION'});expect(Object.keys(l.totals)).toHaveLength(2)});
+ it('rejects invalid numeric inputs and unsafe IDs',()=>{expect(()=>replaceContribution(emptyLedger(),'__proto__',null)).toThrow();expect(()=>replaceContribution(emptyLedger(),'A',{...entry(),kg:{low:5,high:1}})).toThrow()});
+ it('never invents a penalty for absent, stale, wrong-period or wrong-commodity data',()=>{for(const t of [null,{...threshold,validUntil:'2020-01-01'},{...threshold,period:{year:2026}},{...threshold,commodity:'OTHER'}])expect(supplySignal({low:10000,high:20000},ref.commodity,{year:2027},t,now).penalty).toBe(0)});
+ it('caps pilot penalty at 3 and applies smaller uncertain-range adjustment',()=>{const certain=supplySignal({low:2000,high:3000},ref.commodity,{year:2027},threshold,now);expect(certain.penalty).toBe(3);expect(supplySignal({low:500,high:2000},ref.commodity,{year:2027},threshold,now).penalty).toBe(1.5);expect(()=>supplySignal({low:1,high:2},ref.commodity,{year:2027},threshold,now,15)).toThrow()});
+ it('below-reference is explicitly not proof of national balance',()=>{expect(supplySignal({low:100,high:200},ref.commodity,{year:2027},threshold,now).reason).toBe('NOT_PROOF_OF_NATIONAL_BALANCE')});
+ it('pins stored baseline versions; changing data does not mutate approved plans',()=>{const s=initialState();s.productionLedger=syncProduction(s);const id=Object.keys(s.productionLedger.entries)[0];s.productionLedger.entries[id].referenceVersion='older-pinned';const before=JSON.stringify(s);expect(syncProduction(s).entries[id].referenceVersion).toBe('older-pinned');expect(JSON.stringify(s)).toBe(before)});
+ it('caches legacy reads and removes unsupported supply points',()=>{const s=initialState();expect(readProduction(s)).toBe(readProduction(s));expect(s.productionLedger).toBeUndefined();expect(recommend(s.fields[0]).every(r=>r.parts.supply===0)).toBe(true)});
+});

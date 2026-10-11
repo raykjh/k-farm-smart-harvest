@@ -1,0 +1,78 @@
+import {it,expect} from 'vitest';
+import {NextRequest} from 'next/server';
+import {randomUUID} from 'node:crypto';
+import {GET,POST} from '../app/api/labor-capacity/route';
+import {GET as laborGet,POST as laborPost} from '../app/api/labor-operations/route';
+import {POST as sharePost} from '../app/api/labor-sharing/route';
+import {POST as replanPost} from '../app/api/replanning/route';
+import {db} from '../lib/db';
+import {recordSpace} from '../lib/workspace';
+import {testSession} from './auth-fixture';
+import {laborCapacityFixture} from './labor-capacity-fixture';
+import {resourceView} from '../lib/center-resources';
+import {withLaborSupport,laborCapacityBlocks} from '../lib/labor-capacity';
+import {dateSlot,solveSchedule} from '../lib/scheduling-engine';
+import {syncChangedPlanReservations} from '../lib/plan-reservation-sync';
+import {assertLaborCapacitySchedule} from '../lib/labor-capacity-store';
+import type {State,Mission} from '../lib/types';
+const json=(v:unknown)=>JSON.parse(JSON.stringify(v));
+
+it('runs authenticated offer -> receiver confirmation -> real reservation -> attendance -> replan approval and reconfirmation, preserving the isolated DB',async()=>{
+ const fixture=await laborCapacityFixture(),owner=await testSession(),receiver=await testSession('CENTER_ADMIN','janggye'),staff=await testSession('CENTER_STAFF');
+ const request=(path:string,session:typeof owner,body?:unknown)=>new NextRequest('http://127.0.0.1:3100/api/'+path,{method:body?'POST':'GET',headers:session.headers,...(body?{body:JSON.stringify(body)}:{})});
+ const send=async(handler:(req:NextRequest)=>Promise<Response>,path:string,session:typeof owner,body:object,expected=200)=>{const r=await handler(request(path,session,body)),d=await r.json();expect(r.status,JSON.stringify(d)).toBe(expected);return d;};
+ const capacity=(session:typeof owner,body:object,expected=200)=>send(POST,'labor-capacity',session,body,expected);
+ const read=async(session:typeof owner)=>{const r=await GET(request('labor-capacity',session));expect(r.status).toBe(200);return r.json()};
+ const command=(action:string,id:string,version:number)=>({action,id,version,requestId:randomUUID(),reason:'검증용 변경 사유'});
+ try{
+  expect((await GET(new NextRequest('http://127.0.0.1:3100/api/labor-capacity'))).status).toBe(401);
+  const first=await read(owner),id=randomUUID(),body={action:'offer',requestId:id,rosterVersion:first.rosterVersion,window:fixture.window};
+  await capacity(staff,body,403);
+  await capacity(owner,{...body,window:{...fixture.window,borrowerCenterId:'gyenam'}},409);
+  await capacity(owner,body);expect((await capacity(owner,body)).alreadyApplied).toBe(true);
+  await capacity(owner,{...body,window:{...fixture.window,reason:'changed request'}},409);
+  await capacity(owner,command('confirm',id,1),409);
+  expect((await read(receiver)).windows[0].status).toBe('OFFERED');
+  await capacity(receiver,command('confirm',id,1));await capacity(receiver,command('confirm',id,1),409);
+  const recv=(await db.center.findUniqueOrThrow({where:{id:'janggye'}})).state as unknown as State;
+  const view=await resourceView(db,recv,'janggye'),start=dateSlot(fixture.window.date)+4;
+  const task=withLaborSupport(view,{id:'support-harvest',original:start,duration:4,allowed:[start],resource:null,field:'p',person:null,staff:1,transport:0,capacityDemands:{'janggye:workers':1,'janggye:operators':0},selected:true,optional:true,preferred:null,predecessor:null},{owner:'센터 인력',resourceId:null,staff:1,ordinaryWorkers:1,operationCode:'harvest'});
+  const result=await solveSchedule({tasks:[task],purpose:'INITIAL',daily:false,freezeBefore:0,staffCapacity:0,transportCapacity:0,capacityLimits:{'janggye:workers':0,'janggye:operators':0}});
+  expect(result.status).toBe('FEASIBLE');if(result.status!=='FEASIBLE')throw Error('solver');
+  expect(result.assignments[0].laborSupportIds).toEqual([id]);
+  const m:Mission={id:task.id,fieldId:'p',label:'고추 수확',crop:'고추',scheduledDate:fixture.window.date,month:9,owner:'센터 인력',status:'PLANNED',resourceId:null,start:start-dateSlot('2026-09-09'),duration:4,deadline:start+60,priority:1,batchKey:task.id,staff:1,ordinaryWorkers:1,transport:0,laborSupportIds:[id]};
+  Object.assign(m,{operationCode:'harvest',predecessorMissionIds:[],planningWindow:{from:'2032-09-01',to:'2032-09-02',duration:4,rainSensitive:false,basis:'OPERATOR_PROVISIONAL_WINDOW'}});
+  const after={...recv,fields:[{id:'p',farmerId:'fixture-farmer',name:'홍가상',address:'격리 검증용 필지',area:1000,crop:'고추',mode:'완전 위탁형',access:true,water:true,confirmed:true,cluster:'fixture',source:'REGISTERED'}],missions:[m]} as State;
+  await db.$transaction(async tx=>{
+   await tx.$queryRaw`SELECT id FROM "Center" WHERE id='janggye' FOR UPDATE`;
+   await syncChangedPlanReservations(tx,'janggye',recv,after,[m.id],'isolated API test');
+   await tx.center.update({where:{id:'janggye'},data:{state:json(after),version:{increment:1}}});
+   await tx.workRecord.create({data:{workspace:recordSpace('janggye'),kind:'laborDemand',id:m.id,payload:{missionId:m.id}}});
+  });
+  await capacity(owner,command('cancel',id,2),409);
+  const ownView=await resourceView(db,(await db.center.findUniqueOrThrow({where:{id:'demo'}})).state as unknown as State,'demo');
+  expect(laborCapacityBlocks(ownView)).toHaveLength(1);
+  await expect(assertLaborCapacitySchedule(db,'demo',{...ownView,missions:[{...m,id:'conflicting-local',laborSupportIds:[]}]})).rejects.toThrow('충돌');
+  const ownOps=await (await laborGet(request('labor-operations',owner))).json();
+  await send(laborPost,'labor-operations',owner,{action:'person',requestId:randomUUID(),version:ownOps.version,person:{...fixture.worker,active:false},testDataOnly:true},409);
+  const recvOps=await (await laborGet(request('labor-operations',receiver))).json();
+  await send(laborPost,'labor-operations',receiver,{action:'open',requestId:randomUUID(),version:recvOps.version,demandId:m.id,pay:'검증 입력',simpleWorkConfirmed:true});
+  const open=await (await laborGet(request('labor-operations',receiver))).json(),j=open.payload.jobs[0],shareId=randomUUID();
+  await send(sharePost,'labor-sharing',owner,{action:'offer',requestId:shareId,version:ownOps.version,borrowerCenterId:'janggye',jobId:j.id,sourceHash:j.sourceHash,workerId:fixture.worker.id,response:'PHONE',travelMinutes:30,distanceKm:5,consent:true});
+  expect((await db.workRecord.findUniqueOrThrow({where:{workspace_kind_id:{workspace:'shared',kind:'laborShare',id:shareId}}})).payload).toMatchObject({status:'ASSIGNED'});
+  // A second date/window makes a real schedule change possible; only fixture inputs differ.
+  const nextId=randomUUID();await capacity(owner,{...body,requestId:nextId,window:{...fixture.window,date:'2032-09-02'}});await capacity(receiver,command('confirm',nextId,1));
+  const preview=await send(replanPost,'replanning',receiver,{action:'preview',ids:[m.id],preferred:'2032-09-02',scope:'PRESERVE',reason:'작업일 조정',decisionSource:'DEVELOPMENT_REVIEW'});
+  expect(preview.status).toBe('FEASIBLE');expect(preview.assignments[0].laborSupportIds).toEqual([nextId]);
+  await send(replanPost,'replanning',receiver,{action:'approve',proposalId:preview.proposalId});
+  expect((await send(replanPost,'replanning',receiver,{action:'approve',proposalId:preview.proposalId})).alreadyApplied).toBe(true);
+  const stored=(await db.center.findUniqueOrThrow({where:{id:'janggye'}})).state as unknown as State;
+  expect(stored.missions[0]).toMatchObject({scheduledDate:'2032-09-02',laborSupportIds:[nextId]});
+  const changed=await (await laborGet(request('labor-operations',receiver))).json();
+  expect(changed.payload.jobs.find((x:any)=>x.id===j.id).status).toBe('STALE');expect(changed.payload.jobs.find((x:any)=>x.status==='OPEN').responses).toEqual({});
+  expect((await db.workRecord.findUniqueOrThrow({where:{workspace_kind_id:{workspace:'shared',kind:'laborShare',id:shareId}}})).payload).toMatchObject({status:'CANCELLED'});
+  for(const session of [owner,receiver])expect((await read(session)).notices.some((n:any)=>n.event==='PLAN_CHANGED'&&n.detail.attendanceReconfirmationRequired)).toBe(true);
+  expect(await db.outbox.count({where:{id:{startsWith:`replan:${preview.proposalId}:`}}})).toBe(1);
+  await capacity(owner,command('cancel',id,2));await capacity(owner,command('cancel',nextId,2),409);
+ }finally{await owner.cleanup();await receiver.cleanup();await staff.cleanup();await fixture.cleanup()}
+});

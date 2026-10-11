@@ -1,0 +1,24 @@
+import {beforeAll,afterAll} from 'vitest';
+import {testSession} from './auth-fixture';
+let session:Awaited<ReturnType<typeof testSession>>;
+beforeAll(async()=>{session=await testSession()});afterAll(async()=>{await session?.cleanup()});
+import {it,expect} from 'vitest';
+import {NextRequest} from 'next/server';
+import {POST} from '../app/api/task-schedule/route';
+import {registeredDemo} from './registered-demo-fixture';
+import {db} from '../lib/db';
+it('previews without writing, saves once, and rejects stale plan snapshots',async()=>{
+ if(!process.env.DATABASE_URL?.endsWith('/kfarm_test'))throw Error('Isolated test database required');
+ const state=registeredDemo().state;
+ await db.center.upsert({where:{id:'demo'},create:{id:'demo',state:state as any},update:{state:state as any}});
+ const m=state.missions.find(x=>x.crop==='고추'&&x.owner==='농부'&&x.scheduledDate==='2026-09-09')!;
+ const call=(b:any)=>POST(new NextRequest('http://127.0.0.1:3100/api/task-schedule',{method:'POST',headers:{...session.headers,'Content-Type':'application/json'},body:JSON.stringify(b)}));
+ const input={missionId:m.id,preferred:'2026-09-10'};
+ const p=await (await call({...input,action:'preview'})).json();expect(p.options.length).toBeGreaterThan(0);
+ expect((await db.center.findUniqueOrThrow({where:{id:'demo'}})).state).toEqual(state);
+ const save={...input,action:'save',token:p.token,start:p.options[0].start,key:crypto.randomUUID()};
+ expect((await call(save)).status).toBe(200);expect((await call(save)).status).toBe(200);
+ const saved=(await db.center.findUniqueOrThrow({where:{id:'demo'}})).state as any;
+ expect(saved.planVersion).toBe(2);expect(saved.missions.find((x:any)=>x.id===m.id).scheduledDate).toBe(p.options[0].date);
+ expect((await call({...save,key:crypto.randomUUID()})).status).toBe(409);
+});

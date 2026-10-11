@@ -1,0 +1,12 @@
+import {describe,it,expect} from 'vitest';
+import {buildWorkReport,summarizeWorkReport,type ReportEvidence} from '../lib/work-report';
+import type {State} from '../lib/types';
+const state={planVersion:4,fields:[{id:'f',source:'DEMO_ASSUMPTION'}],missions:[{id:'m',fieldId:'f',crop:'쌀',label:'수확',status:'PLANNED',scheduledDate:'2026-08-01',duration:4,staff:2,resourceId:'h'}]} as State;
+const record={missionId:'m',source:'DEMO_SIMULATION',plannedDate:'2026-08-01',assessment:'SIMULATED_COMPLETED',simulatedStartedAt:'2026-08-01T09:00:00+09:00',simulatedFinishedAt:'2026-08-01T10:00:00+09:00',recordId:'r',version:1,updatedAt:'2026-08-01'} as ReportEvidence;
+describe('work report',()=>{
+ it('keeps past unfinished actionable and missing costs unknown',()=>{const r=buildWorkReport(state,[],'2026-09-20');expect(r.rows[0]).toMatchObject({overdue:true,confirmed:false,actualCost:null,executionMinutes:null});expect(summarizeWorkReport(r.rows).overdue).toBe(1)});
+ it('separates simulated completion and keeps source version',()=>{const before=JSON.stringify(state);const r=buildWorkReport(state,[record],'2026-09-20');expect(r.rows[0]).toMatchObject({source:'SIMULATED',confirmed:true,executionMinutes:60,evidenceVersion:1});expect(JSON.stringify(state)).toBe(before)});
+ it('does not use a stale planned-date assessment',()=>{expect(buildWorkReport(state,[{...record,plannedDate:'2026-07-01'}],'2026-09-20').rows[0].confirmed).toBe(false)});
+ it('requires actual confirmation and never infers actual hours from plan',()=>{const s=structuredClone(state);s.fields[0].source='REGISTERED';s.missions[0].status='COMPLETED';expect(buildWorkReport(s,[],'2026-09-20').rows[0].confirmed).toBe(false);const e={...record,source:'ACTUAL',actualFinishedAt:'2026-08-01T10:00:00+09:00',confirmedBy:'operator',confirmedAt:'2026-08-01'};expect(buildWorkReport(s,[e],'2026-09-20').rows[0]).toMatchObject({confirmed:true,source:'ACTUAL',executionMinutes:null})});
+ it('rejects future completion and negative durations',()=>{expect(buildWorkReport(state,[record],'2026-07-01').rows[0].confirmed).toBe(false);expect(buildWorkReport(state,[{...record,simulatedStartedAt:'2026-08-01T11:00:00+09:00'}],'2026-09-20').rows[0].executionMinutes).toBeNull()});
+});
