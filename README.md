@@ -6,7 +6,7 @@ This is an **operational MVP and a policy proposal**, not an adopted government 
 
 ## Capabilities
 
-For the hosted evaluation, see the [judge guide](docs/judge-guide.md). English and a restricted judge account are prefilled. Next-season tasks are under **Schedule → 2027**, not today's dashboard.
+Open the [hosted demonstration](https://kfarm.1gaji.com), or follow the [judge guide](docs/judge-guide.md). English and a restricted judge account are prefilled. Next-season tasks are under **Schedule → 2027**, not today's dashboard. The [174-second video](https://youtu.be/2abo7PjQH_I) and [two actual-model decision cases](docs/ai-decision-evidence.md) provide a short introduction.
 
 - Continuous farmer and parcel registration, linked cultivation records, and preservation of completed work as applications accumulate.
 - New land enrollment is delegation-only: center staff manage crop selection, equipment and labor planning. Worker enrollment is separate and does not require owning or registering a field; registering land never enrolls its owner as a worker. Legacy participation metadata remains readable without rewriting past agreements or completed work.
@@ -147,15 +147,15 @@ To preserve previous four-center verification data, use a new `KFARM_FOUR_CENTER
 
 ## Judge walkthrough
 
-1. Register an applicant and parcel; select a reviewed crop candidate or request AI crop review.
+1. Register fictional applicant details and a parcel with complete, reviewed field conditions. The automatic worker prepares an AI crop/resource draft; refresh to read the saved draft without another call.
 2. Confirm the cultivation and inspect work periods, resources and reservations.
 3. Open a scheduled task, enter a reason and optional preferred date, then press **Reschedule**.
 4. Apply a controlled breakdown or compound incident. Observe date preservation using a substitute, or bounded replanning when needed.
 5. Check the saved result; candidate evaluation and validated model selection take place behind the same command, without separate comparison/approval screens.
-6. Verify changed reservations, labor reconfirmation, both-center notices and the local farmer notification record. Replaying the same request must not apply it or charge inference again.
+6. Verify changed reservations, labor reconfirmation and applicable both-center records. Owner SMS is disabled and worker messages are queued only. Replaying the same request must not apply it or charge inference again.
 7. Inspect a resource-shortage case: the system retains a request to secure equipment, staffing or reviewed work conditions rather than fabricate success.
 
-Use a dedicated evaluation dataset. This is not a public demo URL, and an empty installation does not preload every record needed for this walkthrough.
+The hosted demonstration uses a dedicated synthetic evaluation database. A fresh source installation instead starts empty; it does not preload the private filming dataset or its parcel-provider snapshots.
 
 During screen refinement, existing demo history is preserved, not retrospectively marked complete. After the settings and workflows are settled, demo-only records can be replaced and fed through ordinary registration and chronological work-result paths. Passing a date alone never marks work completed; completion, rescheduling or cancellation needs a recorded outcome.
 
@@ -163,11 +163,11 @@ During screen refinement, existing demo history is preserved, not retrospectivel
 
 This source release contains the application, calculation engine, database schema, synthetic tests and installation instructions under Apache-2.0. It excludes actual API keys, operating databases, personal records, cached provider datasets, raw model logs and internal development handoffs. [Publication and data scope](docs/public-source-and-data.md) explains the boundary.
 
-The source-only Windows checks have passed. Hosted judge access, the final public video and hackathon submission are still pending. A source repository is not a deployed service. Next steps are a separate secure evaluation environment, an English video under three minutes and final submission review. No deployment of the development PC or operating database is implied.
+The [Devpost entry](https://devpost.com/software/k-farm-smart-harvest), [public English video](https://youtu.be/2abo7PjQH_I) and [separate NAS-hosted judge environment](https://kfarm.1gaji.com) are available. The submitted entry and hosted workflow were checked on October 19, 2026. This does not expose the development PC or establish a field-production service.
 
-Screen review and the fresh chronological demonstration come first. The legacy per-endpoint loopback checks have been consolidated into the shared origin guard; local HTTPS login and the model-free four-center workflow passed behind a loopback reverse proxy. This is not an external deployment. The approved host, trusted certificate, reverse proxy and sustained judge access still require environment-specific verification.
+The current application source was reconciled with both NAS web and background-worker containers on October 19. Source-only installation/build checks, isolated browser tests and live NAS model/storage evidence are distinct checks, documented in [verification](docs/verification.md). A successful check is not a guarantee of continuous availability: maintain the NAS, provider connections and the bounded AI allowance through judging. The [judge operations checklist](docs/judge-operations.md) describes this remaining operating responsibility without silently increasing spending authority.
 
-The [official rules](https://nebiusglobalaihackathon.devpost.com/rules) govern submission. The deadline checked on 2026-10-11 is October 30 at 10:00 AM PDT, or **October 31 at 02:00 KST**; recheck before submitting.
+The [official rules](https://nebiusglobalaihackathon.devpost.com/rules) govern submission. The deadline rechecked on 2026-10-19 is October 30 at 10:00 AM PDT, or **October 31 at 02:00 KST**. The stated judging period ends **December 16 at 05:00 KST**.
 
 ## License
 
@@ -177,4 +177,4 @@ Original source is licensed under [Apache License 2.0](LICENSE), selected on 202
 
 K-Farm은 고령·소규모 농가를 지역 농업 지원센터가 함께 지원하면 어떨지 제안하는 운영 소프트웨어입니다. 실제 업무 구조를 구현하고 데모에서는 입력 자료만 가상으로 사용합니다. 작물계획은 담당자가 확정하며, 일정변경은 담당자가 재배치를 요청하면 내부 계산·AI 검증을 거쳐 예약과 안내 기록까지 함께 저장합니다. 장비 구매·외부 파견을 임의 실행하지는 않습니다.
 
-현재 로컬 검증과 실제 모델 연결은 확인했지만 현장 운영 승인·실제 문자·장비 제어·정책 채택을 뜻하지 않습니다. [개발 배경](docs/farmland-policy-rationale-2026-10-08.md), [검증 범위](docs/verification.md), [공개 자료 범위](docs/public-source-and-data.md)를 참고하세요.
+현재 공개 소스·영상·심사용 NAS와 실제 모델을 거쳐 저장되는 흐름을 확인했습니다. 이는 현장 운영 승인·실제 문자·장비 제어·정책 채택을 뜻하지 않습니다. [개발 배경](docs/farmland-policy-rationale-2026-10-08.md), [검증 범위](docs/verification.md), [공개 자료 범위](docs/public-source-and-data.md)를 참고하세요.

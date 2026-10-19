@@ -19,6 +19,8 @@ export const PUBLIC_DOCUMENTS=new Set([
  'docs/public-source-and-data.md',
  'docs/verification.md',
  'docs/judge-guide.md',
+ 'docs/ai-decision-evidence.md',
+ 'docs/judge-operations.md',
 ]);
 export function internalPublicationDocument(path:string){
  return path==='AI-BUDGET-V2.md'||(path.startsWith('docs/')&&!PUBLIC_DOCUMENTS.has(path));

@@ -1,6 +1,6 @@
 import {it,expect} from 'vitest';
 import {readFileSync,readdirSync} from 'node:fs';
-import {PUBLIC_SOURCE_ROOT_FILES,internalPublicationDocument} from '../scripts/public-source-policy';
+import {PUBLIC_DOCUMENTS,PUBLIC_SOURCE_ROOT_FILES,internalPublicationDocument} from '../scripts/public-source-policy';
 
 it('includes every current root verification configuration in the shared export inventory',()=>{
  const configs=readdirSync(process.cwd()).filter(p=>/^(?:vitest|playwright)(?:\.[a-z-]+)*\.config\.ts$/.test(p));
@@ -16,4 +16,10 @@ it('does not include credentials, recovery data or private handoffs in the publi
  expect(internalPublicationDocument('docs/submission-draft-en.md')).toBe(true);
  expect(internalPublicationDocument('AI-BUDGET-V2.md')).toBe(true);
  expect(internalPublicationDocument('docs/clean-installation.md')).toBe(false);
+ const gitignore=readFileSync('.gitignore','utf8').split(/\r?\n/);
+ for(const file of PUBLIC_DOCUMENTS)expect(gitignore,file).toContain('!/'+file);
+ for(const file of ['docs/ai-decision-evidence.md','docs/judge-operations.md']){
+  expect(internalPublicationDocument(file),file).toBe(false);
+  expect(readFileSync(file,'utf8').length).toBeGreaterThan(100);
+ }
 });

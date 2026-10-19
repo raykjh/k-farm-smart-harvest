@@ -1,6 +1,26 @@
 # Verification scope and results
 
-K-Farm has been evaluated as local operational software with controlled inputs. These results establish specific software behaviors, not field safety, national optimization, actual equipment agreements or agricultural income improvements. Model-free tests and paid model evaluations are reported separately.
+K-Farm has been evaluated in isolated local databases and a separate hosted judge environment. These results establish specific software behaviors, not field safety, national optimization, actual equipment agreements or agricultural income improvements. Model-free tests and paid model evaluations are reported separately. The sections below are dated historical results, not a claim that every newer version received every earlier check.
+
+## Submission evidence summary — October 19, 2026
+
+- **Actual AI:** [two traced decisions](ai-decision-evidence.md) connect crop/resource proposals and a compound incident to UI confirmation and stored effects. Both match the rule baseline; superiority is not established.
+- **Hosted workflow:** a fresh NAS intake, automatic Nebius review, approval and a model-backed date change reached persistent records on October 19, after incomplete synthetic field conditions were corrected. Six tasks, three equipment reservations and six labor-demand records were stored. No actual SMS or machinery action occurred.
+- **Scale:** the public 174-second English film uses 300 cadastral references with fictional people/resources: 299 cultivations (284 rice, 15 potato), one held orchard, 1,779 tasks and 897 equipment reservations. A seven-day repair resulted in 129 saved task changes. This is not 300 completed farming seasons or a national optimum.
+- **Source/runtime:** the audited 856-file source snapshot was compared byte-for-byte with both NAS web and operations containers on October 19. The source-only Windows build and fresh empty-database account setup passed. The NAS overlay built on Linux; an independent clean Linux root-Dockerfile build remains unverified.
+- **Operating boundary:** the [judge checklist](judge-operations.md) distinguishes current access, retained backups and a finite AI allowance from guaranteed access throughout judging. A same-volume backup listing is not an offsite restore test.
+
+Later sections retain their original measured counts and notification behavior. In current operation owner SMS is disabled, and worker messages are recorded/queued rather than delivered by a carrier.
+
+## Final submission freeze checks — October 19, 2026
+
+- Regression suite: **198 test files / 855 tests passed; two files / five tests skipped**. Skips require private optional cadastral snapshots or retained model responses; they are not counted as passing.
+- Python solver suite: **56 passed**. TypeScript checking and the production build passed.
+- A newly created, isolated database completed the browser journey from two-field intake through crop/resource approval to a combined machine breakdown and worker absence, adjacent resource allocation, saved changes and attendance/center notice records. Existing operating records were preserved. This final rerun was **model-free**, made no inference charge and reported no page errors; it is separate from the retained actual-model evidence above.
+- The hosted web and operations containers restarted successfully. Four center records, 6,330 non-session work records and 373 outbox records retained exactly the same fingerprints. The canonical ledger retained 717 call records and unchanged cumulative reservation totals. The saved 2027 schedule remained accessible after restart; no database was reseeded.
+- The runtime remains the reviewed `20261019-v6` application snapshot. The final publication adds documentation and source-export checks, not a new deployed application version. New documentation is not claimed to be inside the earlier container digest.
+
+These are point-in-time checks. They do not establish continuous uptime, an offsite restore, a new paid-model comparison or completed farming activity.
 
 ## Production integrated into managed fields — 2026-10-16
 
