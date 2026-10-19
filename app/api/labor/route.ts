@@ -16,8 +16,6 @@ async function handleGET(req:NextRequest){
  }catch{return NextResponse.json({error:'인력 자료를 읽을 수 없습니다.'},{status:503})}
 }
 async function handlePOST(req:NextRequest){
- const origin=req.headers.get('origin');
- if(!['127.0.0.1:3100','localhost:3100'].includes(req.headers.get('host')??'')||(origin&&!['http://127.0.0.1:3100','http://localhost:3100'].includes(origin)))return NextResponse.json({error:'허용되지 않은 출처'},{status:403});
  try{
  const raw=await req.text();if(raw.length>300000)return NextResponse.json({error:'입력이 너무 큽니다.'},{status:413});
  const b=z.object({workspace:z.enum(['operations','sandbox']).transform(()=>recordSpace()),version:z.number().int().nonnegative(),payload:laborRecord}).strict().parse(JSON.parse(raw));

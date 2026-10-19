@@ -17,6 +17,14 @@ export function validApplicationOrigin(req:Request){
  return applicationOrigins().some(allowed=>origin===allowed&&host===new URL(allowed).host);
 }
 
+export function validApplicationRequest(req:Request){
+ if(!['GET','HEAD'].includes(req.method))return validApplicationOrigin(req);
+ // Same-origin reads and top-level navigations normally omit Origin. Host is
+ // still mandatory; a supplied Origin must match that same configured pair.
+ const origin=req.headers.get('origin'),host=req.headers.get('host');
+ return applicationOrigins().some(allowed=>host===new URL(allowed).host&&(origin===null||origin===allowed));
+}
+
 export function secureSessionCookie(req:Request){
  // TLS may terminate at the reverse proxy. The explicitly configured origin,
  // not an attacker-supplied X-Forwarded-Proto, determines the cookie policy.

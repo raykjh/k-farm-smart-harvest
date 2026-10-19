@@ -10,9 +10,35 @@ beforeEach(clearTestReservations);afterEach(clearTestReservations);
 import {registeredDemo} from './registered-demo-fixture';
 vi.mock('../lib/kma-forecast',()=>({readShortForecast:async()=>({status:'NOT_CONFIGURED',kind:'short',points:[],sourceUrl:'test',fetchedAt:'2026-09-10'})}));
 import {POST} from '../app/api/replanning/route';
+it('approves a multi-day repair interval and all affected work atomically without changing historical work',async()=>{
+ vi.useFakeTimers({toFake:['Date']});vi.setSystemTime(new Date('2026-09-18T07:00:00+09:00'));
+ try{
+  const s=registeredDemo().state,base=s.missions.find(m=>m.resourceId==='JB23DR01')!;
+  s.machines=s.machines.filter(m=>m.id==='JB23DR01');
+  const a={...base,id:'repair-selected-1',scheduledDate:'2026-09-18',start:0,status:'PLANNED' as const,duration:32,predecessorMissionIds:[],planningWindow:{from:'2026-09-18',to:'2026-09-24',duration:32,windLimitMs:5,rainSensitive:true,basis:'OPERATOR_PROVISIONAL_WINDOW'}};
+  const b={...a,id:'repair-selected-2',fieldId:s.fields[1].id,scheduledDate:'2026-09-19'},past={...a,id:'repair-completed',scheduledDate:'2026-09-01',status:'COMPLETED' as const};s.missions=[a,b,past];
+  await db.center.upsert({where:{id:'demo'},create:{id:'demo',state:s as any},update:{state:s as any}});
+  const call=(body:any)=>POST(new NextRequest('http://127.0.0.1:3100/api/replanning',{method:'POST',headers:session.headers,body:JSON.stringify(body)}));
+  const outage={machineId:'JB23DR01',from:'2026-09-18',returnOn:'2026-09-20'};
+  const request={action:'preview',ids:[a.id,b.id],outage,automaticReplacement:false,scope:'PRESERVE',reason:'장비 고장 수리',decisionSource:'DEVELOPMENT_REVIEW'};
+  expect((await call({...request,ids:[a.id]})).status).toBe(409);
+  const p=await (await call(request)).json();expect(p.status,JSON.stringify(p)).toBe('FEASIBLE');expect(p.diff).toHaveLength(2);
+  expect(p.diff.every((d:any)=>d.date>='2026-09-20')).toBe(true);
+  expect((await db.center.findUniqueOrThrow({where:{id:'demo'}})).state).toEqual(s);
+  const approved=await call({action:'approve',proposalId:p.proposalId});expect(approved.status,JSON.stringify(await approved.json())).toBe(200);
+  const saved=(await db.center.findUniqueOrThrow({where:{id:'demo'}})).state as any;
+  expect(saved.machines[0].downtimes).toEqual([outage]);expect(saved.missions.find((m:any)=>m.id===past.id)).toEqual(past);
+  expect((await (await call({action:'approve',proposalId:p.proposalId})).json()).alreadyApplied).toBe(true);
+  expect((await db.center.findUniqueOrThrow({where:{id:'demo'}})).state).toEqual(saved);
+  const notices=await db.outbox.findMany({where:{id:{startsWith:'replan:'+p.proposalId+':'}}});expect(notices.length).toBeGreaterThan(0);expect(notices.every(n=>n.status!=='SENT')).toBe(true);
+ }finally{vi.useRealTimers()}
+});
 it('batch preferred date preserves first, then expands explicitly and records reason',async()=>{
  vi.useFakeTimers({toFake:['Date']});vi.setSystemTime(new Date('2026-09-18T07:00:00+09:00'));
  try{const s=registeredDemo().state,base=s.missions.find(m=>m.resourceId==='JB23DR01')!;
+ // This case tests rearrangement with one machine, not the separate spare
+ // equipment path now explicitly present in the registered demo resources.
+ s.machines=s.machines.filter(m=>m.id==='JB23DR01');
  const m={...base,id:'ui-expand-selected',scheduledDate:'2026-09-18',start:0,status:'PLANNED' as const,duration:32,predecessorMissionIds:[],planningWindow:{from:'2026-09-19',to:'2026-09-22',duration:32,windLimitMs:5,rainSensitive:true,basis:'OPERATOR_PROVISIONAL_WINDOW'}};
  const other={...m,id:'ui-expand-other',fieldId:s.fields[1].id,scheduledDate:'2026-09-19'},past={...m,id:'ui-expand-completed',scheduledDate:'2026-09-01',status:'COMPLETED' as const};s.missions=[m,other,past];
  await db.center.upsert({where:{id:'demo'},create:{id:'demo',state:s as any},update:{state:s as any}});

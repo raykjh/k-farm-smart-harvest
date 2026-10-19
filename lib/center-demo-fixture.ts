@@ -6,6 +6,7 @@ import {recordSpace} from './workspace';
 import {saveCenterSetting} from './center-settings-store';
 import {lockCenterPool} from './center-resources';
 import type {State} from './types';
+import {demoEquipmentCrops} from './demo-equipment-crops';
 export const centerDemoBatch='new-centers-resources-2026-10-02';
 const json=(v:unknown)=>JSON.parse(JSON.stringify(v));
 // Input data only. The production planner and reservation engine are unchanged.
@@ -38,7 +39,7 @@ export async function installCenterDemo(tx:Prisma.TransactionClient,id:string,ge
  if(geography.name!==centerDefinition(id).township)throw Error('지역 불일치');
  let state=structuredClone(before);
  const capacities={DR:1,TR:0.4,RP:0.3,PS:0.2,CB:0.3,PD:0.2,SP:0.5,TV:0};
- for(const [kind,type] of equipmentTypes.filter(([kind])=>Object.hasOwn(capacities,kind)))for(const n of [1,2])state=applyEquipmentEdit(state,{id:`${centerDefinition(id).prefix}${kind}0${n}`,name:type,kind,capacityHaHour:capacities[kind as keyof typeof capacities],status:'AVAILABLE',manufacturer:'',model:'',product:'',purchasedOn:'',servicePhone:'',notes:`DEMO · ${centerDemoBatch}`},undefined,id);
+ for(const [kind,type] of equipmentTypes.filter(([kind])=>Object.hasOwn(capacities,kind)))for(const n of [1,2])state=applyEquipmentEdit(state,{id:`${centerDefinition(id).prefix}${kind}0${n}`,name:type,kind,compatibleCrops:[...demoEquipmentCrops[kind]],capacityHaHour:capacities[kind as keyof typeof capacities],status:'AVAILABLE',manufacturer:'',model:'',product:'',purchasedOn:'',servicePhone:'',notes:`DEMO · ${centerDemoBatch}`},undefined,id);
  state.demoResourceBatchId=centerDemoBatch;
  await tx.center.update({where:{id},data:{state:json(state),version:{increment:1}}});
  const evidence={basis:`DEMO · ${centerDemoBatch} · 실제 확보 자원 아님`,checkedOn:'2026-10-02'};

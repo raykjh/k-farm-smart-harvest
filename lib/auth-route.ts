@@ -2,14 +2,14 @@ import {NextRequest,NextResponse} from 'next/server';
 import {authenticate,asPrincipal} from './auth';
 import {permitted} from './auth-policy';
 import {db} from './db';
-import {validApplicationOrigin} from './application-origin';
+import {validApplicationOrigin,validApplicationRequest} from './application-origin';
 export const validOrigin=validApplicationOrigin;
 export function withAuth(path:string,handler:(req:NextRequest)=>Promise<Response>){return async(req:NextRequest)=>{
  try{
  const user=await authenticate(req);if(!user)return NextResponse.json({error:'로그인이 필요합니다.'},{status:401});
+ if(!validApplicationRequest(req))return NextResponse.json({error:'출처 거부'},{status:403});
  if(user.mustChangePassword)return NextResponse.json({error:'임시 비밀번호를 먼저 변경해주세요.',code:'PASSWORD_CHANGE_REQUIRED'},{status:403});
  let body:any=null;if(req.method!=='GET'&&req.method!=='HEAD'){
-  if(!validOrigin(req))return NextResponse.json({error:'출처 거부'},{status:403});
   const raw=await req.clone().text();if(raw.length>2000000)return NextResponse.json({error:'입력 크기 초과'},{status:413});
   try{body=JSON.parse(raw)}catch{return NextResponse.json({error:'JSON 형식 오류'},{status:400})}
  }

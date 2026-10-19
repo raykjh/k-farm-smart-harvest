@@ -5,6 +5,7 @@ import type {State} from './types';
 import {appendAssignments,type delegatedProposal} from './delegated-planning';
 import {syncChangedPlanReservations} from './plan-reservation-sync';
 import {plannedLaborDemand} from './planned-labor-demand';
+import {applyRegistrationOrigins} from './registration-origin';
 const json=(v:unknown)=>JSON.parse(JSON.stringify(v)) as Prisma.InputJsonValue;
 /** Caller locks center and field inventory, revalidates proposal and authority. */
 export async function commitDelegatedPlans(tx:Prisma.TransactionClient,input:{state:State;fields:FieldEntry[];version:number;plans:Awaited<ReturnType<typeof delegatedProposal>>['plans'];names:Record<string,string>;proposalId:string;actor:string;today:string}){
@@ -27,8 +28,9 @@ export async function commitDelegatedPlans(tx:Prisma.TransactionClient,input:{st
   farmerIds.add(field.consultationId);
  }
  await tx.workRecord.update({where:{workspace_kind_id:{workspace:recordSpace(),kind:'fields',id:'current'}},data:{payload:json(fields),version}});
+ await applyRegistrationOrigins(tx,next);
  await syncChangedPlanReservations(tx,activeCenterId(),input.state,next,plans.flatMap(r=>r.dispatch.assignments.map(a=>a.taskId)),actor);
  next.planVersion++;await tx.center.update({where:{id:activeCenterId()},data:{state:json(next),version:{increment:1}}});
- for(const farmerId of farmerIds)await tx.outbox.create({data:{id:'delegated:'+proposalId+':'+farmerId,centerId:activeCenterId(),farmerId,planVersion:next.planVersion,body:'위탁 농지의 작물·작업 계획이 확정되었습니다. 작업 일정은 농사계획에서 확인해주세요.'}});
+ for(const farmerId of farmerIds)await tx.outbox.create({data:{status:'RECORDED_ONLY',id:'delegated:'+proposalId+':'+farmerId,centerId:activeCenterId(),farmerId,planVersion:next.planVersion,body:'위탁 농지의 작물·작업 계획이 확정되었습니다. 작업 일정은 농사계획에서 확인해주세요.'}});
  return {ok:true,fields:plans.length,assigned:plans.reduce((n,r)=>n+r.dispatch.assignments.length,0),unassigned:plans.reduce((n,r)=>n+r.dispatch.pending.length,0),notifications:farmerIds.size};
 }

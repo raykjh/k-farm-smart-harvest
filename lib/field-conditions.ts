@@ -4,6 +4,9 @@ const known=z.enum(['unknown','yes','no']);
 const suitability=z.enum(['unknown','suitable','marginal','unsuitable']);
 export const fieldConditions=z.object({
  landUse:z.enum(['unknown','paddy','upland','orchard']),water:known,drainage:z.enum(['unknown','good','poor']),
+ // Optional for historical records: never silently reinterpret them as open-field.
+ cadastralUse:z.enum(['unknown','paddy','upland','orchard','other']).optional(),
+ growingEnvironment:z.enum(['unknown','open_field','unheated_greenhouse','heated_greenhouse']).optional(),
  machineAccess:known,laborAvailable:known,region:z.string().trim().max(100),
  climate:z.object({rice:suitability,potato:suitability,pepper:suitability}).catchall(suitability).refine(v=>Object.keys(v).every(k=>(cropCodes as readonly string[]).includes(k)),'지원하지 않는 작물 적합성'),
  existingBearingOrchard:z.boolean().optional(),existingOrchardCrop:z.enum(['apple','pear','peach','grape','plum']).optional(),farmerCrew:z.number().int().min(1).max(100).optional(),
@@ -11,7 +14,7 @@ export const fieldConditions=z.object({
 }).strict();
 export type FieldConditions=z.infer<typeof fieldConditions>;
 export const emptyConditions=():FieldConditions=>({landUse:'unknown',water:'unknown',drainage:'unknown',machineAccess:'unknown',laborAvailable:'unknown',region:'',climate:{rice:'unknown',potato:'unknown',pepper:'unknown'},evidence:'',checkedOn:''});
-export const recommendationPolicy={version:'field-conditions-v1',climate:40,soilWater:25,execution:25,labor:10};
+export const recommendationPolicy={version:'field-conditions-v2',climate:40,soilWater:25,execution:25,labor:10};
 // Operator policy points, not government agronomic coefficients or a yield forecast.
 // Climate suitability must be reviewed for each crop/variety with local evidence.
 export function recommendConditions(raw?:FieldConditions){
@@ -22,6 +25,11 @@ export function recommendConditions(raw?:FieldConditions){
   if(!c.evidence||!c.checkedOn||!c.region)missing.push('EVIDENCE_REQUIRED');
   if(c.checkedOn&&c.checkedOn>new Date(Date.now()+9*3600000).toISOString().slice(0,10))missing.push('FUTURE_REVIEW');
   if(c.landUse==='unknown')missing.push('LAND_USE');
+  if(c.growingEnvironment==='unknown')missing.push('GROWING_ENVIRONMENT');
+  // The current operational catalog has no reviewed greenhouse practice profile.
+  // A cadastral paddy may contain a greenhouse, but its open-field calendar must
+  // not become executable merely by changing the label or the AI's crop choice.
+  if(c.growingEnvironment&& !['unknown','open_field'].includes(c.growingEnvironment))missing.push('FACILITY_PRACTICE_REVIEW');
   if(!c.climate[crop]||c.climate[crop]==='unknown')missing.push('REGIONAL_CLIMATE');
   if(c.climate[crop]==='unsuitable')blocked.push('CLIMATE_UNSUITABLE');
   if(crop==='rice'){

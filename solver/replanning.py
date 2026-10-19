@@ -3,6 +3,7 @@ from ortools.sat.python import cp_model
 from typing import Literal
 from time import monotonic
 from .schedule_components import scheduling_components
+from .schedule_hints import placement_hints
 
 CONTRACT_VERSION = 'shared-schedule-v1'
 
@@ -73,8 +74,11 @@ class Request(BaseModel):
     capacityLimits: dict[str, int] = Field(default_factory=dict)
     capacityBlocks: list[CapacityBlock] = Field(default_factory=list, max_length=2000)
 
-def attempt(req: Request, expand: bool, time_limit: float = 5):
+def attempt(req: Request, expand: bool, time_limit: float = 5, diagnostics: dict | None = None):
+    began=monotonic()
+    if diagnostics is not None:diagnostics['failureKind']='INFEASIBLE'
     model=cp_model.CpModel(); starts={}; ends={}; intervals=[]; resources={}; people={}; fields={}; costs=[]; selections={}; loan_claims={}; pool_caps={}; presence={}; durations={}
+    valid_options={};movable_ids=set()
     initial=req.purpose=='INITIAL'
     operator_selections={};labor_selections={};local_staff={};local_workers={}
     # Exclusive equipment-days match the operational cross-center loan policy.
@@ -101,6 +105,8 @@ def attempt(req: Request, expand: bool, time_limit: float = 5):
             allowed=[s for s in o.allowed if s%32+duration<=32] if movable else ([t.original] if o.resource==t.resource and t.original in o.allowed and duration==t.duration else [])
             if allowed: valid.append((o,allowed))
         if not valid and not optional:return None
+        valid_options[t.id]=valid
+        if movable:movable_ids.add(t.id)
         values=sorted(set(s for _,allowed in valid for s in allowed)) or [t.original]
         start=model.new_int_var_from_domain(cp_model.Domain.from_values(values),f's{i}')
         present=model.new_bool_var(f'present{i}')
@@ -243,9 +249,17 @@ def attempt(req: Request, expand: bool, time_limit: float = 5):
             return None
         demands = [local_workers[t.id] if t.workerPool==key else t.capacityDemands.get(key,0) for t in req.tasks]+[b.capacityDemands.get(key,0) for b in req.capacityBlocks]
         model.add_cumulative(intervals+blocks, demands, req.capacityLimits[key])
+    if not initial:
+        hints=placement_hints(req,valid_options,movable_ids,min(began+time_limit*0.15,monotonic()+0.5))
+        for id,hint in hints.items():
+            model.add_hint(starts[id],hint.start)
+            model.add_hint(durations[id],hint.duration)
+            for index,(_,chosen) in enumerate(selections[id]):model.add_hint(chosen,int(index==hint.option))
     model.minimize(sum(costs));solver=cp_model.CpSolver()
-    solver.parameters.max_time_in_seconds=time_limit;solver.parameters.num_search_workers=1
+    solver.parameters.max_time_in_seconds=max(0.001,time_limit-(monotonic()-began));solver.parameters.num_search_workers=1
     status=solver.solve(model)
+    if diagnostics is not None:
+        diagnostics['failureKind']='TIME_LIMIT' if status==cp_model.UNKNOWN else 'INVALID' if status==cp_model.MODEL_INVALID else 'INFEASIBLE'
     if status not in (cp_model.OPTIMAL,cp_model.FEASIBLE):return None
     return {'assignments':[{'id':t.id,'start':solver.value(starts[t.id]),**({'duration':solver.value(durations[t.id])} if initial else {}),'resource':next(o.resource for o,b in selections[t.id] if solver.value(b)),**({'operatorIds':sorted(p for p,b in operator_selections[t.id] if solver.value(b))} if t.operatorCount is not None else {}),**({'laborSupportIds':sorted(p for p,b in labor_selections[t.id] if solver.value(b))} if t.ordinaryWorkerCount or t.laborSupportIds else {})} for t in req.tasks if solver.value(presence[t.id])], 'unassigned':[t.id for t in req.tasks if not solver.value(presence[t.id])], 'optimal':status==cp_model.OPTIMAL}
 
@@ -261,11 +275,11 @@ def _large_replan(req:Request):
     components=scheduling_components(req.tasks)
     diagnostics={'components':len(components),'largestComponent':max(map(len,components),default=0)}
     if any(len(c)>600 for c in components):
-        return {'status':'NO_FEASIBLE_PLAN',**diagnostics,'reason':f'연결된 혼잡 구간 {max(map(len,components))}건은 한 번의 안전 계산 한도(600건)를 초과합니다. 센터·작업기간별 병목 검토가 필요합니다. 임의 분할·부분 승인을 하지 않았습니다.'}
+        return {'status':'NO_FEASIBLE_PLAN','failureKind':'SIZE_LIMIT',**diagnostics,'reason':f'연결된 혼잡 구간 {max(map(len,components))}건은 한 번의 안전 계산 한도(600건)를 초과합니다. 센터·작업기간별 병목 검토가 필요합니다. 임의 분할·부분 승인을 하지 않았습니다.'}
     deadline=monotonic()+30
     all_assignments=[];unassigned=[];phases=[]
     for index,component in enumerate(components):
-        if monotonic()>=deadline:return {'status':'NO_FEASIBLE_PLAN',**diagnostics,'reason':'전체 계산 시간 한도에 도달했습니다. 부분 결과는 적용하지 않았습니다.'}
+        if monotonic()>=deadline:return {'status':'NO_FEASIBLE_PLAN','failureKind':'TIME_LIMIT',**diagnostics,'reason':'전체 계산 시간 한도에 도달했습니다. 부분 결과는 적용하지 않았습니다.'}
         blocked=set(unassigned)
         for _ in range(len(component)):
             old=len(blocked)
@@ -289,7 +303,7 @@ def _large_replan(req:Request):
         budget=min(5,max(0.001,(deadline-monotonic()-0.5)*len(component)/weight))
         result=_replan(sub,deadline,budget)
         if result['status']!='FEASIBLE':return {**result,**diagnostics}
-        if monotonic()>=deadline:return {'status':'NO_FEASIBLE_PLAN',**diagnostics,'reason':'전체 계산 시간 한도에 도달했습니다. 부분 결과는 적용하지 않았습니다.'}
+        if monotonic()>=deadline:return {'status':'NO_FEASIBLE_PLAN','failureKind':'TIME_LIMIT',**diagnostics,'reason':'전체 계산 시간 한도에 도달했습니다. 부분 결과는 적용하지 않았습니다.'}
         all_assignments.extend(result['assignments']);unassigned.extend(result.get('unassigned',[]));phases.append(result['phase'])
     phase='INITIAL_DISPATCH' if req.purpose=='INITIAL' else ('REBUILD_APPROVED' if req.rebuildMode=='EXPAND' else 'REBUILD_RELATED' if 'REBUILD_RELATED' in phases else 'GAPS_ONLY')
     # Presence decisions across seasonal prerequisites can affect later yield;
@@ -298,14 +312,26 @@ def _large_replan(req:Request):
 
 def _replan(req:Request,deadline:float|None=None,budget:float=5):
     if len({t.id for t in req.tasks})!=len(req.tasks):return {'status':'INVALID'}
+    failures=[]
+    def search(expand):
+        diagnostic={}
+        result=attempt(req,expand,min(budget,max(0.001,deadline-monotonic())) if deadline else budget,diagnostic)
+        if result is None:failures.append(diagnostic.get('failureKind','TIME_LIMIT'))
+        return result
+    def unfinished():
+        kind='TIME_LIMIT' if 'TIME_LIMIT' in failures or deadline and monotonic()>=deadline else 'INVALID' if 'INVALID' in failures else 'INFEASIBLE'
+        reason={'TIME_LIMIT':'일정 계산 시간 한도에 도달했습니다. 가능한 배치가 없다는 뜻은 아니며, 기존 일정은 변경하지 않았습니다.',
+                'INVALID':'계산 입력·모델 검증이 필요합니다. 기존 일정은 변경하지 않았습니다.',
+                'INFEASIBLE':'현재 작업기간·장비·인력·운송·고정 일정 조건을 함께 만족하는 배치가 없습니다.'}[kind]
+        return {'status':'NO_FEASIBLE_PLAN','failureKind':kind,'reason':reason}
     if req.purpose=='INITIAL':
-        result=attempt(req,False,min(budget,max(0.001,deadline-monotonic())) if deadline else budget)
-        return {'status':'FEASIBLE','phase':'INITIAL_DISPATCH',**result} if result is not None else {'status':'NO_FEASIBLE_PLAN','reason':'계산 시간 내 기존 확정 일정과 새 작업 제약을 만족하는 배치를 찾지 못했습니다.'}
+        result=search(False)
+        return {'status':'FEASIBLE','phase':'INITIAL_DISPATCH',**result} if result is not None else unfinished()
     phases=[False] if req.rebuildMode=='PRESERVE' else [True] if req.rebuildMode=='EXPAND' else [False,True]
     first=None
     for expand in phases:
         if deadline and monotonic()>=deadline:break
-        result=attempt(req,expand,min(budget,max(0.001,deadline-monotonic())) if deadline else budget)
+        result=search(expand)
         if result is None:continue
         out={'status':'FEASIBLE','phase':('REBUILD_APPROVED' if req.rebuildMode=='EXPAND' else 'REBUILD_RELATED') if expand else 'GAPS_ONLY',**result}
         def distance(r):
@@ -315,4 +341,4 @@ def _replan(req:Request,deadline:float|None=None,budget:float=5):
         if first and distance(first)<=distance(out):return first
         return out
     if first:return first
-    return {'status':'NO_FEASIBLE_PLAN','reason':'계산 시간 내 작업기간·장비·인력·운송·고정 일정 제약을 함께 만족하는 배치를 찾지 못했습니다.'}
+    return unfinished()

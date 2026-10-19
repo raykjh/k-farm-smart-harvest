@@ -64,17 +64,17 @@ describe('common operating path for 30 crop profiles',()=>{
   const removed={...s,machines:s.machines.map(m=>m.id.includes('SE')?{...m,compatibleCrops:[]}:m)};
   expect((await previewAnnualDispatch(p,removed,'2033-12-31')).feasibility[0].status).toBe('INCOMPLETE');expect(JSON.stringify(s)).toBe(before);
  });
- it('does not outsource a joint farmer crew or book its owner in two fields at once',async()=>{
+ it('counts center labor for newly generated work even when legacy enrollment metadata is retained',async()=>{
   const f=catalogField('soybean');f.mode='joint';f.conditions!.farmerCrew=3;
   const p=buildAnnualPlan([f],2034,1,catalogContext(),catalogCycle('soybean')),s=catalogState(),r=await previewAnnualDispatch(p,s,'2033-12-31');
   const saved=appendAssignments(s,p,r),harvest=saved.missions.find(m=>m.id.endsWith(':harvest'))!;
-  expect(harvest.farmerWorkers).toBe(1);expect(harvest.machineOperators).toBe(1);expect(harvest.staff).toBe(1);expect(ordinaryWorkerDemand(harvest)).toBe(0);
-  expect(missionResourceUse(saved,harvest).person).toBe(f.consultationId);
+  expect(harvest.farmerWorkers).toBe(0);expect(harvest.machineOperators).toBe(1);expect(harvest.staff).toBe(2);expect(ordinaryWorkerDemand(harvest)).toBe(1);
+  expect(missionResourceUse(saved,harvest).person).toBeNull();expect(f.mode).toBe('joint');
  });
- it('requires the joint participant to confirm sufficient manual crew',async()=>{
+ it('does not derive available labor from ownership or a legacy farmer crew count',async()=>{
   const f=catalogField('lettuce');f.mode='joint';
-  const blocked=await previewAnnualDispatch(buildAnnualPlan([f],2034,1,catalogContext(),catalogCycle('lettuce')),catalogState(),'2033-12-31');expect(blocked.feasibility[0].status).toBe('INCOMPLETE');
-  f.conditions!.farmerCrew=3;const ready=await previewAnnualDispatch(buildAnnualPlan([f],2034,1,catalogContext(),catalogCycle('lettuce')),catalogState(),'2033-12-31');expect(ready.feasibility[0].status).toBe('CAPACITY_FEASIBLE');expect(ready.assignments.filter(a=>!a.machineId).every(a=>a.owner==='농부'&&a.staff===0)).toBe(true);
+  const withoutCrew=await previewAnnualDispatch(buildAnnualPlan([f],2034,1,catalogContext(),catalogCycle('lettuce')),catalogState(),'2033-12-31');expect(withoutCrew.feasibility[0].status).toBe('CAPACITY_FEASIBLE');
+  f.conditions!.farmerCrew=3;const ready=await previewAnnualDispatch(buildAnnualPlan([f],2034,1,catalogContext(),catalogCycle('lettuce')),catalogState(),'2033-12-31');expect(ready.feasibility[0].status).toBe('CAPACITY_FEASIBLE');expect(ready.assignments.filter(a=>!a.machineId).every(a=>a.owner==='센터 인력'&&a.staff>0)).toBe(true);
  });
  it('adds delegated new crops in receipt order with the same planner and preserves completed cycles',async()=>{
   const f=catalogField('soybean'),criteria={profiles:[{id:'next',name:'격리 작기',context:catalogContext(),dataOrigin:'DEMO' as const,sourceBatchId:'isolated-crop30-test'}]};

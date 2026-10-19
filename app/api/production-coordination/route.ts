@@ -17,12 +17,12 @@ export const POST=withAuth('production-coordination',async req=>{
  try{
   const b=z.object({version:z.number().int().nonnegative(),policy:coordinationPolicySchema}).strict().parse(await req.json()),global=currentPrincipal()?.role==='SUPER_ADMIN',actor=actorLabel();
   if(b.policy.specialties.some(s=>!knownCenter(s.centerId)))throw Error('지역 확인 필요');
-  if([...b.policy.yields,...b.policy.targets,...b.policy.specialties].some(s=>s.checkedOn>today()))throw Error('미래 검토일은 사용할 수 없습니다.');
+  if([...b.policy.yields,...b.policy.targets,...b.policy.specialties,...b.policy.marketOutlooks??[]].some(s=>s.checkedOn>today()))throw Error('미래 검토일은 사용할 수 없습니다.');
   const result=await db.$transaction(async tx=>{
    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'production-coordination'}))`;
    const row=await tx.workRecord.findUnique({where:{workspace_kind_id:coordinationPolicyKey}}),previous=coordinationPolicySchema.parse(row?.payload??emptyCoordinationPolicy());
    if((row?.version??0)!==b.version)throw Error('기준이 변경되었습니다. 다시 불러오세요.');
-   if(!global&&(JSON.stringify(b.policy.yields)!==JSON.stringify(previous.yields)||JSON.stringify(b.policy.targets)!==JSON.stringify(previous.targets)||JSON.stringify(b.policy.specialties.filter(s=>s.centerId!==centerId()))!==JSON.stringify(previous.specialties.filter(s=>s.centerId!==centerId()))))throw Error('전국 기준은 총괄, 지역 특화 기준은 소속 센터만 수정할 수 있습니다.');
+   if(!global&&(JSON.stringify(b.policy.yields)!==JSON.stringify(previous.yields)||JSON.stringify(b.policy.targets)!==JSON.stringify(previous.targets)||JSON.stringify(b.policy.marketOutlooks??[])!==JSON.stringify(previous.marketOutlooks??[])||JSON.stringify(b.policy.specialties.filter(s=>s.centerId!==centerId()))!==JSON.stringify(previous.specialties.filter(s=>s.centerId!==centerId()))))throw Error('전국 기준은 총괄, 지역 특화 기준은 소속 센터만 수정할 수 있습니다.');
    const payload=JSON.parse(JSON.stringify(b.policy)),version=b.version+1;
    await tx.workRecord.upsert({where:{workspace_kind_id:coordinationPolicyKey},create:{...coordinationPolicyKey,payload,version},update:{payload,version}});
    await tx.audit.create({data:{centerId:global?'global':centerId(),action:'production.coordination.policy',detail:{actor,version,before:row?.payload??null,after:payload}}});

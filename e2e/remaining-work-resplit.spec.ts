@@ -1,4 +1,5 @@
 import {test,expect} from './authenticated-test';
+import {openWorkOrder} from './work-order-navigation';
 import {db} from '../lib/db';
 import {laborCapacityFixture} from '../tests/labor-capacity-fixture';
 import {seedSplitWorkAreas} from '../tests/split-work-area-fixture';
@@ -37,7 +38,7 @@ test('resplits remaining work through approval and re-reviews only the unfinishe
   await review.getByRole('button',{name:/변경계획 일괄 승인·저장/}).click();await expect(modal).toHaveCount(0);
   const saved=(await db.center.findUniqueOrThrow({where:{id:'demo'}})).state as unknown as State;
   expect(saved.missions.find(m=>m.id===frozen.id)).toEqual(frozen);expect(saved.missions.filter(m=>m.status!=='COMPLETED')).toHaveLength(2);
-  await page.goto('/?tab=equipment');const panel=page.getByTestId('equipment-missions');await panel.locator('summary').first().click();
+  const panel=await openWorkOrder(page,saved.missions.find(m=>m.status!=='COMPLETED')!);
   const group=page.getByTestId('split-area-'+f.groupId);await group.locator('summary').first().click();
   await expect(group).toContainText('남은 구역만 다시 나눕니다.');await group.getByRole('button',{name:'면적 비율로 구역 초안',exact:true}).click();
   const finishedArea=group.getByLabel('회차 1 GeoJSON',{exact:true});await expect(finishedArea).toHaveAttribute('readonly','');
@@ -47,11 +48,11 @@ test('resplits remaining work through approval and re-reviews only the unfinishe
   await group.scrollIntoViewIfNeeded();await page.screenshot({path:info.outputPath('fixed-and-remaining-areas-ko.png'),fullPage:true});
   const data=await (await page.request.get('/api/equipment-missions')).json();expect(data.tasks).toHaveLength(2);expect(data.tasks.every((t:any)=>t.ready)).toBe(true);
   for(const task of data.tasks){
-   const section=panel.locator(':scope > details').filter({has:page.locator(':scope > summary').filter({hasText:task.label})});
-   await section.locator('summary').first().click();await section.getByRole('button',{name:'전달자료 생성',exact:true}).click();
+   await openWorkOrder(page,task);const section=panel.getByTestId('work-order-packet-'+task.id);
+   await section.getByRole('button',{name:'전달자료 생성',exact:true}).click();
    await expect(section.getByRole('button',{name:'내부 연결 수신 확인',exact:true})).toBeEnabled();
   }
-  await page.getByLabel('언어 / Language').selectOption('en');await page.setViewportSize({width:390,height:844});await expect(group).toContainText('Completed area fixed');
+  await group.locator('summary').first().click();await page.getByLabel('언어 / Language').selectOption('en');await page.setViewportSize({width:390,height:844});await expect(group).toContainText('Completed area fixed');
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
   await page.screenshot({path:info.outputPath('remaining-areas-mobile-en.png'),fullPage:true});
   expect(((await db.center.findUniqueOrThrow({where:{id:'demo'}})).state as unknown as State).missions.find(m=>m.id===frozen.id)).toEqual(frozen);
@@ -60,14 +61,14 @@ test('resplits remaining work through approval and re-reviews only the unfinishe
  }finally{await f.cleanup();await base.cleanup()}
 });
 
-test('links explicitly reviewed legacy work parts from the equipment screen without changing schedules',async({page},info)=>{
+test('links explicitly reviewed legacy work parts from the task work order without changing schedules',async({page},info)=>{
  if(!process.env.DATABASE_URL?.endsWith('/kfarm_test'))throw Error('Disposable DB required');
  const base=await laborCapacityFixture(),f=await seedSplitWorkAreas();
  try{
   for(const [i,m] of (f.parts as WorkMission[]).entries()){delete m.equipmentSplit;delete m.equipmentWork;delete m.splitChildIds;m.operationKey='legacy:soil'+(i?':part2':'')}
   await db.center.update({where:{id:'demo'},data:{state:JSON.parse(JSON.stringify(f.state))}});
   const reservations=await db.workRecord.findMany({where:{kind:'resourceReservation'},orderBy:{id:'asc'}});
-  await page.goto('/?tab=equipment');const panel=page.getByTestId('equipment-missions');await panel.locator('summary').first().click();
+  const panel=await openWorkOrder(page,f.parts[0]);
   const legacy=panel.locator('[data-testid^="legacy-parts-"]');await legacy.locator('summary').click();
   for(const n of [1,2]){await legacy.getByLabel(`기존 회차 ${n} m²`,{exact:true}).fill('5000');await legacy.getByLabel(`기존 회차 ${n} 준비시간`,{exact:true}).fill('60')}
   await legacy.getByLabel('이관 확인 근거',{exact:true}).fill('격리 검증: 승인된 회차별 작업량 확인');await legacy.getByRole('checkbox').check();

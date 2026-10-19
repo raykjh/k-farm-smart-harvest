@@ -26,7 +26,7 @@ test('main chrome, translation, schedule month and expanded today, demos isolate
  await expect(page.getByTestId('today-weather')).not.toContainText('등록');await page.screenshot({path:'test-results/ui-main.png',fullPage:true});
  await expect(page.getByTestId('workspace-status')).toContainText(today);
  await expect(page.getByTestId('calendar-day-'+move(-1))).toContainText('예정작업 0');
- await expect(page.getByTestId('calendar-day-'+move(-1))).not.toContainText('확인 필요');await expect(page.getByTestId('task-attention')).toHaveCount(0);await expect(page.locator('.home-quick-actions button')).toHaveCount(4);
+ await expect(page.getByTestId('calendar-day-'+move(-1))).not.toContainText('확인 필요');await expect(page.getByTestId('task-attention')).toHaveCount(0);await expect(page.locator('.home-quick-actions button')).toHaveCount(5);
  await expect(page.getByTestId('calendar-day-'+today)).toContainText('예정작업 1');
  await page.locator('.language-selector select').selectOption('en');await expect(page.getByRole('heading',{name:'Operations overview'})).toBeVisible();
  await page.locator('.language-selector select').selectOption('ko');await page.getByRole('navigation').getByRole('button',{name:'일정표',exact:true}).click();
@@ -34,7 +34,7 @@ test('main chrome, translation, schedule month and expanded today, demos isolate
  await expect(page.getByTestId('schedule-day-'+today)).toHaveAttribute('open','');await expect(page.getByTestId('schedule-day-'+move(1))).not.toHaveAttribute('open','');await expect(page.getByTestId('schedule-day-'+move(-1))).toHaveCount(0);
  await expect(page.getByTestId('ops-schedule')).not.toContainText('기한 경과');
  await page.getByTestId('schedule-day-'+today).getByRole('button',{name:'일정변경',exact:true}).click();
- await expect(page.getByRole('dialog')).toBeVisible();await expect(page.getByRole('button',{name:'변경 대안 비교',exact:true})).toBeDisabled();await page.getByRole('dialog').getByRole('button',{name:'닫기',exact:true}).first().click();
+ await expect(page.getByRole('dialog')).toBeVisible();await page.getByRole('button',{name:'일정변경 진행',exact:true}).click();await expect(page.getByRole('button',{name:'자동 재배치 계산',exact:true})).toBeDisabled();await page.getByRole('dialog').getByRole('button',{name:'닫기',exact:true}).first().click();
  await page.getByRole('navigation').getByRole('button',{name:'데모',exact:true}).click();await expect(page.getByTestId('incident-console')).toBeVisible();
 });
 test('equipment popup saves through API with immutable identity',async({page})=>{
@@ -80,13 +80,14 @@ test('an open calendar advances past plans after KST midnight without business w
  await expect(page.getByTestId('calendar-day-'+today)).not.toContainText('확인 필요');await expect(page.getByTestId('task-attention')).toHaveCount(0);await page.getByRole('navigation').getByRole('button',{name:'일정표',exact:true}).click();await expect(page.getByTestId('task-attention')).toContainText('작업결과 미입력 2건');
  expect(writes).toEqual([]);
 });
-test('field map supports drag and wheel, production and farmer retain navigation',async({page})=>{
+test('field map supports drag and wheel and shared crop information retains navigation',async({page})=>{
  await page.route('**/api/delegated-planning',r=>r.fulfill({json:{items:[],fields:[],proposals:[]}}));
- await page.goto('/');await page.getByRole('navigation').getByRole('button',{name:'농지',exact:true}).click();const map=page.getByTestId('field-map');await expect(map).toBeVisible();await expect(map.locator('path')).toHaveCount(1);
- await map.scrollIntoViewIfNeeded();const box=(await map.boundingBox())!,before=await map.locator('path').getAttribute('d');await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();await page.mouse.move(box.x+box.width/2+80,box.y+box.height/2+30,{steps:5});await page.mouse.up();await expect(map.locator('path')).not.toHaveAttribute('d',before!);
+ await page.goto('/');await page.getByRole('navigation').getByRole('button',{name:'농지',exact:true}).click();const map=page.getByTestId('field-map'),parcel=map.locator('path:not([stroke-dasharray])');await expect(map).toBeVisible();await expect(parcel).toHaveCount(1);
+ await map.scrollIntoViewIfNeeded();const box=(await map.boundingBox())!,before=await parcel.getAttribute('d');await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();await page.mouse.move(box.x+box.width/2+80,box.y+box.height/2+30,{steps:5});await page.mouse.up();await expect(parcel).not.toHaveAttribute('d',before!);
  const tile=await map.locator('image').first().getAttribute('href');await page.mouse.wheel(0,-200);await expect(map.locator('image').first()).not.toHaveAttribute('href',tile!);
- await page.getByRole('navigation').getByRole('button',{name:'생산관리',exact:true}).click();await expect(page.getByRole('button',{name:'작물 기준자료',exact:true})).toBeVisible();
- await page.getByRole('navigation').getByRole('button',{name:'농부 화면',exact:true}).click();await expect(page.getByRole('navigation')).toBeVisible();await expect(page.locator('.phone')).toBeVisible();
+ await expect(page.getByRole('tab',{name:'생산현황',exact:true})).toHaveCount(0);await expect(page.getByRole('button',{name:'AI 계획·일괄 확정',exact:true})).toBeVisible();
+ await page.getByRole('navigation').getByRole('link',{name:'작물정보',exact:true}).click();await expect(page.getByRole('tab',{name:'작물 기준자료',exact:true})).toBeVisible();
+ await expect(page.getByRole('navigation')).toBeVisible();await expect(page.getByRole('navigation').getByText('농부 화면',{exact:true})).toHaveCount(0);
 });
 test('labor calendars open ranked attendance roster and record an override',async({page})=>{
  const payload=emptyLaborOps(),ids=['11111111-1111-4111-8111-111111111111','22222222-2222-4222-8222-222222222222'];
@@ -98,14 +99,14 @@ test('labor calendars open ranked attendance roster and record an override',asyn
 });
 test('preferred conflict requires expansion request then batch approval',async({page})=>{
  const calls:any[]=[];let compared:any;await page.route('**/api/replanning',async r=>{const b=r.request().postDataJSON();calls.push(b);if(b.action==='compare')compared=comparedPlans(b);await r.fulfill({json:b.action==='compare'?compared:b.action==='approve'?{ok:true}:{...compared.results.find((x:any)=>x.previewRequest.scope===b.scope).result,proposalId:'proposal'}})});
- await page.goto('/');await page.getByRole('navigation').getByRole('button',{name:'일정표',exact:true}).click();await page.getByTestId('schedule-day-'+today).getByRole('button',{name:'일정변경',exact:true}).click();await page.getByLabel('변경 사유',{exact:true}).fill('장비 일정 조정');await page.getByLabel('변경 희망일 (비우면 자동 지정)').fill(move(1));await page.getByRole('button',{name:'변경 대안 비교',exact:true}).click();
+ await page.goto('/');await page.getByRole('navigation').getByRole('button',{name:'일정표',exact:true}).click();await page.getByTestId('schedule-day-'+today).getByRole('button',{name:'관리',exact:true}).click();await page.getByLabel('변경 사유',{exact:true}).fill('장비 일정 조정');await page.getByLabel('변경 희망일 (비우면 자동 지정)').fill(move(1));await page.getByRole('button',{name:'변경 대안 비교',exact:true}).click();
  await expect(page.locator('.replan-option')).toHaveCount(2);await expect(page.getByRole('button',{name:/변경계획 일괄 승인·저장/})).toHaveCount(0);expect(calls.map(x=>x.action)).toEqual(['compare']);
  await page.getByRole('button',{name:'충돌 관련 일정 재배치 · 선택',exact:true}).click();await expect(page.getByRole('region',{name:'선택안 상세 변경'})).toContainText('함께 조정');await page.getByRole('button',{name:/변경계획 일괄 승인·저장/}).click();await expect(page.getByRole('dialog')).toHaveCount(0);expect(calls.map(x=>x.action)).toEqual(['compare','preview','approve']);expect(calls[1]).toMatchObject({scope:'EXPAND',decisionSource:'DEVELOPMENT_REVIEW',comparisonSnapshot:'a'.repeat(64)});expect(calls[0].reason).toBe('장비 일정 조정');
 });
 
 async function openComparison(page:Page){
  await page.goto('/');await page.getByRole('navigation').getByRole('button',{name:'일정표',exact:true}).click();
- await page.getByTestId('schedule-day-'+today).getByRole('button',{name:'일정변경',exact:true}).click();
+ await page.getByTestId('schedule-day-'+today).getByRole('button',{name:'관리',exact:true}).click();
  await page.getByLabel('변경 사유',{exact:true}).fill('장비 일정 조정');
  await page.getByLabel('변경 희망일 (비우면 자동 지정)').fill(move(1));
 }
@@ -265,7 +266,7 @@ test('comparison is readable in the work area and English on a narrow screen',as
  expect(panel.x).toBeGreaterThanOrEqual(content.x);expect(panel.x+panel.width).toBeLessThanOrEqual(1440);
  await dialog.getByRole('button',{name:'닫기',exact:true}).first().click();
  await page.locator('.language-selector select').selectOption('en');
- await page.getByTestId('schedule-day-'+today).getByRole('button',{name:'Change schedule',exact:true}).click();
+ await page.getByTestId('schedule-day-'+today).getByRole('button',{name:'Manage',exact:true}).click();
  await page.getByLabel('Change reason',{exact:true}).fill('Change equipment schedule');await page.getByRole('button',{name:'Compare alternatives',exact:true}).click();
  await expect(page.getByRole('heading',{name:'Schedule alternatives',exact:true})).toBeVisible();
  await page.setViewportSize({width:480,height:900});
@@ -286,7 +287,7 @@ test('closing during comparison discards late results and does not save a propos
  await openComparison(page);await page.getByRole('button',{name:'변경 대안 비교',exact:true}).click();
  await expect(page.getByRole('button',{name:'대안 계산 중…',exact:true})).toBeDisabled();await expect(page.getByLabel('변경 사유',{exact:true})).toBeDisabled();
  await page.getByRole('dialog').getByRole('button',{name:'닫기',exact:true}).first().click();release();
- await page.getByTestId('schedule-day-'+today).getByRole('button',{name:'일정변경',exact:true}).click();await expect(page.locator('.replan-option')).toHaveCount(0);expect(calls).toEqual(['compare']);
+ await page.getByTestId('schedule-day-'+today).getByRole('button',{name:'관리',exact:true}).click();await expect(page.locator('.replan-option')).toHaveCount(0);expect(calls).toEqual(['compare']);
 });
 
 test('a previously saved batch proposal still opens for approval without recalculating',async({page})=>{

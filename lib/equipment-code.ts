@@ -1,4 +1,4 @@
-import type {State} from './types';
+import type {State,Machine} from './types';
 import {centerRegistry} from './center-registry';
 
 // K-Farm's internal center prefix, independent of official administrative codes.
@@ -6,6 +6,12 @@ const centerPrefixes:Readonly<Record<string,string>>=Object.fromEntries(centerRe
 const legacyCodes:Readonly<Record<string,string>>={D1:'JB23DR01',D2:'JB23DR02',P1:'JB23SD01',H1:'JB23HV01'};
 
 export function equipmentCode(id:string){return legacyCodes[id]??id}
+/** Display labels can differ; registered kind and crop/implement eligibility
+ * are checked separately. Unknown legacy kinds still require identical types. */
+export function sameEquipmentKind(a:Machine,b:Machine){
+ const kind=(m:Machine)=>(m as Machine&{ledger?:{kind?:string}}).ledger?.kind??equipmentCode(m.id).match(/(DR|TR|RP|PS|CB|PD|SP|TV|SE|GC|RD)\d+$/)?.[1];
+ return kind(a)&&kind(b)?kind(a)===kind(b):a.type===b.type;
+}
 
 export function nextEquipmentCode(state:State,kind:string,centerId=state.centerSharing?.centerId??'demo'){
  const prefix=centerPrefixes[centerId];

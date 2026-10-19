@@ -1,11 +1,31 @@
 import {describe,it,expect,vi,afterEach,beforeEach} from 'vitest';
 const mock=vi.hoisted(()=>({execute:vi.fn(),transaction:vi.fn()}));
 vi.mock('../lib/db',()=>({db:{$transaction:mock.transaction,aiCall:{create:vi.fn().mockResolvedValue({}),update:vi.fn().mockResolvedValue({})}}}));
-import {validateRequest,reserveBudget,budgetedCompletion,APPROVED_MODEL,reservationMicroUsd,usageEstimate,PRICE_REVIEW_EXPIRES_AT,VALIDATION_MICRO_USD} from '../lib/ai-budget';
+import {validateRequest,reserveBudget,budgetedCompletion,APPROVED_MODEL,reservationMicroUsd,usageEstimate,PRICE_REVIEW_EXPIRES_AT,VALIDATION_MICRO_USD,effectiveValidationCeiling} from '../lib/ai-budget';
 import {db} from '../lib/db';
 beforeEach(()=>{vi.useFakeTimers({toFake:['Date']});vi.setSystemTime(new Date('2026-09-11T00:00:00Z'))});
 afterEach(()=>{vi.useRealTimers();vi.unstubAllGlobals();vi.unstubAllEnvs();vi.restoreAllMocks();mock.execute.mockReset();mock.transaction.mockReset();});
 describe('AI budget fail closed',()=>{
+ it('keeps the reviewed window open through judging without removing the expiry or expanding the slice',async()=>{
+  expect(Date.parse(PRICE_REVIEW_EXPIRES_AT)).toBeGreaterThan(Date.parse('2026-12-15T20:00:00Z'));
+  expect(Date.parse(PRICE_REVIEW_EXPIRES_AT)).toBeLessThanOrEqual(Date.parse('2026-12-17T00:00:00Z'));
+  vi.setSystemTime(new Date('2026-12-15T20:00:00Z'));
+  vi.stubEnv('AI_MODE','nebius');vi.stubEnv('NEBIUS_API_KEY','test-not-real');
+  vi.stubEnv('KFARM_AI_RESERVATION_CEILING_MICRO_USD','4171458');
+  mock.transaction.mockRejectedValue(new Error('approved slice exhausted'));
+  const network=vi.fn();vi.stubGlobal('fetch',network);
+  await expect(budgetedCompletion({model:APPROVED_MODEL,max_tokens:32})).rejects.toThrow('approved slice exhausted');
+  expect(mock.transaction).toHaveBeenCalledOnce();expect(network).not.toHaveBeenCalled();
+  expect(effectiveValidationCeiling()).toBe(4171458);
+ });
+ it('permits only a lower verification ceiling and uses it in the atomic shared-ledger update',async()=>{
+  vi.stubEnv('KFARM_AI_RESERVATION_CEILING_MICRO_USD','4171458');expect(effectiveValidationCeiling()).toBe(4171458);
+  mock.execute.mockResolvedValueOnce(0).mockResolvedValueOnce(1).mockResolvedValueOnce(0).mockResolvedValueOnce(1);
+  mock.transaction.mockImplementation(fn=>fn({$executeRaw:mock.execute}));
+  await reserveBudget(5000);expect(mock.execute.mock.calls[3]).toContain(4171458);
+  vi.stubEnv('KFARM_AI_RESERVATION_CEILING_MICRO_USD','999999999');expect(effectiveValidationCeiling()).toBe(VALIDATION_MICRO_USD);
+  for(const value of ['-1','abc','0','1.5']){vi.stubEnv('KFARM_AI_RESERVATION_CEILING_MICRO_USD',value);expect(()=>effectiveValidationCeiling()).toThrow('Invalid');}
+ });
  it('blocks expired pricing before reserving or calling the network',async()=>{
   vi.setSystemTime(new Date(Date.parse(PRICE_REVIEW_EXPIRES_AT)+1));vi.stubEnv('AI_MODE','nebius');vi.stubEnv('NEBIUS_API_KEY','test-not-real');
   const network=vi.fn();vi.stubGlobal('fetch',network);

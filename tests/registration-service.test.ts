@@ -3,7 +3,8 @@ import {db} from '../lib/db';
 import {saveRegistration} from '../lib/registration-service';
 import {randomUUID} from 'node:crypto';
 import {intakeField} from '../lib/registration-intake';
-const input=(pnu:string,version:number)=>{const id=randomUUID();return {requestId:randomUUID(),consultationId:id,consultationVersion:0,fieldVersion:version,testDataOnly:true,consultation:{farmer:{name:'홍검증',birth:'1960-01-01',phone:'000-0000-0000',contact:'sms'},application:{policy:'OWNER_SERVICE_V1',residence:'가상',cultivationHistory:'가상',supportReason:'가상',exceptionReason:'',review:'pending'},fields:[{id:randomUUID(),pnu,address:'전북특별자치도 장수군 계북면 농소리 616-4',area:'1000',crop:'rice',mode:'joint',tenure:'owned',ownerName:'',ownerPhone:'',evidence:'none',end:'',callAt:'',operator:'',callResult:'pending',scope:'',verified:'pending'}],consent:true,step:3},cultivations:[{cultivation:{id:randomUUID(),pnu,crop:'rice',start:'2031-01-01',end:'2031-12-31',source:'REGISTERED'},context:{region:'계북면'}}]};};
+import {parcelBoundarySchema} from '../lib/parcel-boundary';
+const input=(pnu:string,version:number)=>{const id=randomUUID();return {requestId:randomUUID(),consultationId:id,consultationVersion:0,fieldVersion:version,testDataOnly:true,consultation:{farmer:{name:'홍검증',birth:'1960-01-01',phone:'000-0000-0000',contact:'sms'},application:{policy:'OWNER_SERVICE_V1',residence:'가상',cultivationHistory:'가상',supportReason:'가상',exceptionReason:'',review:'pending'},fields:[{id:randomUUID(),pnu,address:'전북특별자치도 장수군 계북면 농소리 616-4',area:'1000',crop:'rice',mode:'delegated',tenure:'owned',ownerName:'',ownerPhone:'',evidence:'none',end:'',callAt:'',operator:'',callResult:'pending',scope:'',verified:'pending'}],consent:true,step:3},cultivations:[{cultivation:{id:randomUUID(),pnu,crop:'rice',start:'2031-01-01',end:'2031-12-31',source:'REGISTERED'},context:{region:'계북면'}}]};};
 it('isolated transaction joins registration, cultivation and plan; replays once and rolls back all writes',async()=>{
  if(!process.env.DATABASE_URL?.endsWith('/kfarm_test'))throw Error('isolated DB only');
  const before=await db.workRecord.count();let id='';
@@ -36,12 +37,16 @@ it('new intake preserves prior fields and accepts full delegation without invent
   const previous=input('5274036023106160004',0);previous.cultivations=[];
   const registered=await saveRegistration(tx,previous,'intake-test');
   const {geometry,selected,...f}=intakeField('5274036023106160005','계북면 검증 필지');
-  const full={...input(f.pnu,registered.fieldVersion),consultation:{...previous.consultation,fields:[{...f,area:'2000',crop:'',mode:'delegated'}]},cultivations:[]};
+  const boundary=parcelBoundarySchema.parse({geometry:{type:'Polygon',coordinates:[[[127.5,35.7],[127.501,35.7],[127.501,35.701],[127.5,35.701],[127.5,35.7]]]},source:'VWORLD',checkedOn:'2026-10-18'});
+  const full={...input(f.pnu,registered.fieldVersion),consultation:{...previous.consultation,fields:[{...f,boundary,area:'2000',crop:'',mode:'delegated'}]},cultivations:[]};
   const result=await saveRegistration(tx,full,'intake-test');
   expect(result).toMatchObject({fields:1,drafts:[],rights:'pending',approvalRequired:true});
   const all=await tx.workRecord.findUnique({where:{workspace_kind_id:{workspace:'sandbox',kind:'fields',id:'current'}}});
   const fields=all!.payload as any[];
   expect(fields).toHaveLength(2);expect(fields[0]).toMatchObject({pnu:previous.consultation.fields[0].pnu,crop:'rice',area:1000});expect(fields[1]).toMatchObject({pnu:f.pnu,crop:'',mode:'full',area:2000,rights:'pending'});
+  expect(fields[1].boundary).toEqual(boundary);expect(fields[0].boundary).toBeUndefined();
+  const consultation=await tx.workRecord.findUniqueOrThrow({where:{workspace_kind_id:{workspace:'sandbox',kind:'consultation',id:full.consultationId}}});
+  expect((consultation.payload as any).fields[0].boundary).toEqual(boundary);
   expect((await saveRegistration(tx,full,'intake-test')).alreadyApplied).toBe(true);
   throw Error('ROLLBACK_INTAKE');
  },{timeout:20000})).rejects.toThrow('ROLLBACK_INTAKE');

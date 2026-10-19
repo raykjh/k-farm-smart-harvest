@@ -17,10 +17,12 @@ test('daily selection compares and reviews a batch without applying it',async({p
   else await r.fulfill({json:{...compared.results[1].result,proposalId:'00000000-0000-4000-8000-000000000001'}});
  });
  await page.goto('/');await page.getByRole('navigation').getByRole('button',{name:'일정표',exact:true}).click();
- const day=page.getByTestId('schedule-day-'+today);await day.getByRole('button',{name:'미완료 전체 선택'}).click();await day.getByRole('button',{name:'일정변경',exact:true}).click();
+ const day=page.getByTestId('schedule-day-'+today);await day.getByRole('button',{name:'전체 선택'}).click();await day.getByRole('button',{name:'일정변경',exact:true}).click();
+ await page.getByRole('button',{name:'일정변경 진행',exact:true}).click();
  const panel=page.getByRole('region',{name:'작업 관리',exact:true});
- await panel.getByLabel('변경 사유',{exact:true}).fill('당일 미완료 작업 재배치');await panel.getByRole('button',{name:'변경 대안 비교',exact:true}).click();
- await expect(panel.locator('.replan-option')).toHaveCount(2);expect(calls[0].day).toBe(today);expect(calls[0].ids).toHaveLength(2);expect(calls[0]).not.toHaveProperty('preferred');
+ await panel.getByLabel('변경 사유',{exact:true}).fill('당일 미완료 작업 재배치');await panel.getByRole('button',{name:'자동 재배치 계산',exact:true}).click();
+ await expect(panel.locator('.replan-option')).toHaveCount(3);expect(calls[0].day).toBe(today);expect(calls[0].deferAfter).toBe(today);expect(calls[0].searchMode).toBe('LOCAL_FIRST');expect(calls[0].ids).toHaveLength(2);expect(calls[0]).not.toHaveProperty('preferred');
+ await panel.getByText('계산 대안 상세',{exact:true}).click();
  await panel.getByRole('button',{name:'충돌 관련 일정 재배치 · 선택',exact:true}).click();
  await expect(panel.getByRole('button',{name:/변경계획 일괄 승인/})).toBeEnabled();expect(calls.map(c=>c.action)).toEqual(['compare','preview']);
  expect(calls[1].decisionSource).toBe('DEVELOPMENT_REVIEW');

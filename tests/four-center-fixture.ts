@@ -3,9 +3,10 @@ import {db} from '../lib/db';
 import {centerRegistry,emptyCenter} from '../lib/center-registry';
 import {recordSpace} from '../lib/workspace';
 import {emptyConditions} from '../lib/field-conditions';
+import {fourCenterDatabaseUrl} from '../scripts/disposable-test-db';
 
 // Shared by in-process route tests and browser E2E. Never a production seed.
-export const fourCenterTestUrl='postgresql://kfarm:kfarm_local_demo@127.0.0.1:55432/kfarm_centers_e2e';
+export const fourCenterTestUrl=fourCenterDatabaseUrl();
 export const fixtureToday=new Date(Date.now()+9*3600000).toISOString().slice(0,10);
 export const fixtureYear=Number(fixtureToday.slice(0,4))+1;
 export const fixtureDay=(md:string)=>`${fixtureYear}-${md}`;
@@ -13,6 +14,10 @@ const json=(v:unknown)=>JSON.parse(JSON.stringify(v));
 
 export async function resetFourCenterFixture(){
  if(process.env.DATABASE_URL!==fourCenterTestUrl)throw Error('Dedicated four-center DB required');
+ if(process.env.KFARM_JOURNEY_REQUIRE_EMPTY==='1'){
+  const counts=await Promise.all([db.workRecord.count(),db.center.count(),db.outbox.count(),db.receipt.count(),db.audit.count()]);
+  if(counts.some(n=>n>0))throw Error('Preservation run requires a new empty DB; existing records will not be reset.');
+ }
  await db.$transaction(async tx=>{
   await tx.outbox.deleteMany();await tx.receipt.deleteMany();await tx.audit.deleteMany();await tx.workRecord.deleteMany();await tx.center.deleteMany();
   for(const c of centerRegistry){

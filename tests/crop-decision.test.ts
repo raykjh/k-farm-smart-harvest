@@ -45,7 +45,7 @@ it('compares different operation profiles and keeps unavailable machinery distin
  const results=(await compareCropAlternatives([{id:'machine-crop',plan:plan('TR')},{id:'labor-crop',plan:plan(null)}],s,'2026-09-28',[
   {id:'a',candidateId:'machine-crop',resourceScope:'LOCAL_ONLY'},{id:'b',candidateId:'labor-crop',resourceScope:'LOCAL_ONLY'},
  ])).results;
- expect(results[0].status).toBe('INCOMPLETE');expect(results[1].metrics.staffPersonMinutes).toBe(60);
+ expect(results[0].status).toBe('INCOMPLETE');expect(results[1].metrics.staffPersonMinutes).toBe(240);
  s.staffCount=0;expect((await compareCropAlternatives([{id:'crop',plan:plan(null)}],s,'2026-09-28',options)).results[0].status).toBe('INCOMPLETE');
 });
 it('rejects unknown candidates, duplicate IDs, invalid dates and drafter-authored capacity',async()=>{

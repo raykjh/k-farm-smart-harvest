@@ -1,4 +1,5 @@
 'use client';
+import {operationalText} from '@/lib/operational-i18n';
 import {useState} from 'react';
 import {cropCodes,type SupportedCropCode} from '@/lib/crop-registry';
 import {workloadCrops,WORKLOAD_CATALOG_VERSION,workloadSources,type WorkloadOperation} from '@/lib/crop-workload-catalog';
@@ -10,19 +11,31 @@ import {useLanguage} from './language';
 import {InformationShell,Facts,SourceLink,LoadState,useReferenceData,useInfoSelection} from './information-shared';
 import styles from './information.module.css';
 import ProductionCoordinationPanel from './production-coordination-panel';
+import ProductionCriteriaEditor from './production-criteria-editor';
+import CropReferencePanel from './crop-reference-panel';
+import CapacityStudyPanel from './capacity-study-panel';
+import IntegratedPlanPanel from './integrated-plan-panel';
+import CultivationRecords from './cultivation-records';
 import {PUBLIC_CRITERIA_CHECKED_ON,PUBLIC_CRITERIA_VERSION} from '@/lib/public-crop-criteria';
 
 export default function CropInformation(){
  const {locale}=useLanguage(),ko=locale==='ko',t=(a:string,b:string)=>ko?a:b;
  const [query,setQuery]=useState(''),[category,setCategory]=useState('ALL'),[selected,select]=useInfoSelection('crop','rice');
+ const [requestedTab,selectTab]=useInfoSelection('tab','guide');
+ const tab=['guide','cultivations','references','capacity'].includes(requestedTab)?requestedTab:'guide';
  const standards=useReferenceData<{items:SavedRegionalStandard[]}>('/api/regional-crop-standards');
  const auth=useReferenceData<{user:{role:string}|null}>('/api/auth');
  const crops=workloadCrops.filter(c=>(category==='ALL'||c.category===category)&&`${c.name} ${c.en} ${c.id}`.toLowerCase().includes(query.trim().toLowerCase()));
  const info=informationCrop(selected);
- return <InformationShell kind="crop-info"><div className={styles.layout}>
+ return <InformationShell kind="crop-info"><div className="view-tabs" role="tablist" aria-label={t('작물정보 메뉴','Crop information sections')}>{[['guide',t('작물 안내','Crop guide')],['cultivations',t('재배기록','Cultivation records')],['references',t('작물 기준자료','Crop references')],['capacity',t('30작물 자원계획','30-crop resource planning')]].map(([id,label])=><button key={id} type="button" role="tab" aria-selected={tab===id} aria-pressed={tab===id} onClick={()=>selectTab(id)}>{label}</button>)}</div>
+ {tab==='guide'&&<div className={styles.layout}>
  <aside className={styles.directory} aria-label={t('작물 목록','Crop directory')}><label>{t('작물 검색','Search crops')}<input type="search" value={query} onChange={e=>setQuery(e.target.value)} placeholder={t('작물명 입력','Crop name')}/></label><label>{t('분류','Category')}<select value={category} onChange={e=>setCategory(e.target.value)}>{[['ALL',t('전체','All')],['PADDY',t('논작물','Paddy crops')],['UPLAND',t('밭작물','Field crops')],['VEGETABLE',t('채소','Vegetables')],['ORCHARD',t('과수','Orchards')]].map(([v,n])=><option key={v} value={v}>{n}</option>)}</select></label><p className={styles.count} role="status">{crops.length} / {workloadCrops.length} {t('작물','crops')}</p><div className={styles.list}>{crops.map(c=><button key={c.id} aria-pressed={selected===c.id} onClick={()=>select(c.id)}><span>{ko?c.name:c.en}</span><small>{c.operations.length}{t('개 작업 단계',' work stages')}</small></button>)}{!crops.length&&<p className={styles.empty}>{t('검색 결과가 없습니다.','No matching crops.')}</p>}</div></aside>
  {info?<CropDetail key={selected} id={selected as SupportedCropCode} standards={standards} canEdit={auth.data?.user?.role==='SUPER_ADMIN'}/>:<section className={`${styles.paper} ${styles.empty}`}><p role="alert">{t('해당 작물정보가 없습니다.','Crop information not found.')}</p><button className={styles.button} onClick={()=>select(cropCodes[0])}>{t('전체 작물에서 선택','Select from the crop directory')}</button></section>}
- </div><ProductionCoordinationPanel/></InformationShell>;
+ </div>}
+ {tab==='cultivations'&&(auth.data?.user?.role==='SUPER_ADMIN'?<section className="card"><p>{t('센터별 재배기록은 해당 센터 계정에서 확인합니다.','Open cultivation records using the relevant center account.')}</p></section>:auth.data?.user&&<CultivationRecords/>)}
+ {tab==='references'&&<><CropReferencePanel embedded/><ProductionCoordinationPanel/>{auth.data?.user&&auth.data.user.role!=='SUPER_ADMIN'&&<ProductionCriteriaEditor/>}</>}
+ {tab==='capacity'&&<><IntegratedPlanPanel/><CapacityStudyPanel/></>}
+ </InformationShell>;
 }
 function CropDetail({id,standards,canEdit}:{id:SupportedCropCode;standards:ReturnType<typeof useReferenceData<{items:SavedRegionalStandard[]}>>;canEdit:boolean}){
  const {locale}=useLanguage(),ko=locale==='ko',t=(a:string,b:string)=>ko?a:b;
@@ -40,7 +53,7 @@ function CropDetail({id,standards,canEdit}:{id:SupportedCropCode;standards:Retur
  <Facts rows={[[t('참고 수확량','Reference yield'),<span key="yield">{quantity}{ref&&<small className={styles.metadata}>{ref.years[0]}–{ref.years.at(-1)} · {t('전국 연평균 단수의 최솟값~최댓값','Min–max of national annual mean yields')}</small>}</span>],[t('생산물 기준','Commodity basis'),ref?ref.basis[ko?0:1]:t('미확보 · 0으로 계산하지 않음','Unavailable, not zero')],...(ref?[[t('적용 조건','Application scope'),ref.qualification[ko?0:1]] as [string,string]]:[])]}/>
  <h4>{t('필요 장비','Required equipment')}</h4><div className={styles.tags}>{info.equipment.map(kind=><a key={kind} href={`/equipment-info?kind=${kind}`}>{equipmentName(kind,ko)} ↗</a>)}</div>
  <div className={styles.scroll}><table className={styles.table}><thead><tr>{[t('작업 / 선행작업','Work / predecessors'),t('가능 기간','Allowed windows'),t('장비·인력','Equipment / crew'),t('소요시간','Duration')].map(h=><th key={h}>{h}</th>)}</tr></thead><tbody>{c.operations.map(o=><tr key={o.code}><td><strong>{operationName(o,ko)}</strong><small>{o.kind==='CONDITIONAL'?t('조건부 시행','Conditional'):o.kind==='INSPECTION'?t('예찰·확인','Inspection'):t('필수 작업','Required')}</small>{o.predecessors.length>0&&<small>{t('선행: ','After: ')}{o.predecessors.map(p=>operationName(c.operations.find(x=>x.code===p)!,ko)).join(', ')}</small>}{o.condition&&<small>{conditionName(o,ko)}</small>}</td><td>{o.windows.map((w,i)=><p key={i}>{o.windows.length>1&&`${i+1}. `}{windowLabel(w,ko)}</p>)}</td><td>{o.methods.map(m=><div key={m.id}>{m.capability?<a href={`/equipment-info?kind=${equipmentKindFor(m.capability)}`}>{equipmentName(equipmentKindFor(m.capability),ko)}</a>:t('인력 작업','Manual work')}<small>{methodName(m.mode,ko)}</small><small>{t('운영자','Operators')} {m.operators} · {t('일반 인력','Workers')} {m.workers}<br/>{t('운송 자원','Transport units')} {m.transport}</small></div>)}</td><td>{o.methods.map(m=><div key={m.id}><span className={styles.number}>{m.minutesPer1000m2} {t('분 / 1,000㎡','min / 1,000 m²')}</span><small>+ {t('준비','Setup')} {m.setupMinutes} {t('분','min')}</small></div>)}</td></tr>)}</tbody></table></div>
- <p className={styles.metadata}>{t('시간은 팀 전체의 경과시간입니다. 인시 합계가 아닙니다. 면적에 따라 분할하고 매 작업일 준비시간을 다시 잡습니다. 공동참여형의 일반 인력은 농부 측 담당입니다.','Duration is elapsed crew time, not person-hours. Large tasks are split with setup on each workday. In joint participation, ordinary labor is supplied by the farmer.')}</p>
+ <p className={styles.metadata}>{t('시간은 팀 전체의 경과시간입니다. 인시 합계가 아닙니다. 면적에 따라 분할하고 매 작업일 준비시간을 다시 잡습니다. 일반 인력은 별도 등록한 근무 신청자 중에서 센터가 배정합니다.','Duration is elapsed crew time, not person-hours. Large tasks are split with setup on each workday. The center assigns ordinary labor from separately registered workers.')}</p>
  {info.guideline&&<LegacyGuide id={id} info={info}/>}
  </section>
  <section className={styles.section} data-active={tab==='conditions'}><h3>{t('적용 조건','Application conditions')}</h3><Facts rows={[[t('농지 유형','Land use'),c.category==='PADDY'?t('논 · 용수 확인','Paddy; water supply review'):c.category==='ORCHARD'?t('해당 작물이 있는 기존 성목 과원','Existing bearing orchard of this crop'):t('밭 · 배수 확인','Upland; drainage review')],[t('지역·품종','Region / variety'),t('농지별 기후 적합성 근거 확인','Review climate suitability for the field')],[t('기온·지온','Air / soil temperature'),t('아래 저장 기준으로 확인 · 임의 임계치 없음','Use saved standards below; no invented thresholds')],[t('작업 여건','Access / staffing'),t('진입·작업기 호환·인력 확보 확인','Review access, implement compatibility and crew')]]}/>
@@ -54,7 +67,7 @@ function CropDetail({id,standards,canEdit}:{id:SupportedCropCode;standards:Retur
  </section>
  <section className={styles.section} data-active={tab==='sources'}><h3>{t('근거·버전','Evidence / version')}</h3><p className={styles.note}>{t('작물 수록, 공식 통계, 계산용 잠정값, 지역 검토는 서로 다른 근거입니다. 수록되어 있다는 이유만으로 현장 자동 실행이 허용되지는 않습니다.','Catalog inclusion, official statistics, provisional calculation inputs and local review are distinct evidence. Inclusion does not authorize field execution.')}</p><ul className={styles.sources}>
  <li><strong>{t('작업기간·자원 입력','Work windows / resource inputs')}</strong><small>{WORKLOAD_CATALOG_VERSION}</small><small>{t('30작물 공통 계산 원본 · 월일·처리시간·인원은 잠정값','Shared 30-crop calculation source; windows, rates and crews are provisional')}</small></li>
- {ref&&<li><SourceLink href={ref.sourceUrl}>{t('공식 생산통계','Official production statistics')}</SourceLink><small>{PUBLIC_CRITERIA_VERSION} · {t('발표일','Published')} {ref.publishedOn} · {t('확인일','Checked')} {PUBLIC_CRITERIA_CHECKED_ON} · {ref.locator}</small><small>{t('전국 연평균 단수 범위 · 해당 농지 수확량 보장이나 예측 신뢰구간 아님','Historical national mean-yield range; not a field guarantee or forecast interval')}</small></li>}
+ {ref&&<li><SourceLink href={ref.sourceUrl}>{t('공식 생산통계','Official production statistics')}</SourceLink><small>{PUBLIC_CRITERIA_VERSION} · {t('발표일','Published')} {ref.publishedOn} · {t('확인일','Checked')} {PUBLIC_CRITERIA_CHECKED_ON} · {operationalText(ref.locator,locale)}</small><small>{t('전국 연평균 단수 범위 · 해당 농지 수확량 보장이나 예측 신뢰구간 아님','Historical national mean-yield range; not a field guarantee or forecast interval')}</small></li>}
  {info.guideline&&<li><SourceLink href={info.guideline.source}>{t('농촌진흥청 작업 가이드 근거','RDA work guideline source')}</SourceLink><small>{guidelineVersion} · {t('작업 순서와 지역 일정은 구분','Work sequence is distinct from regional scheduling')}</small></li>}
  {catalog&&<li><SourceLink href={catalog.source.url}>{t('농사로 작물·작형 목록','Nongsaro crop / practice directory')}</SourceLink><small>{t('목록 확인용 · 사용허락 별도 검토','Directory only; reuse terms require separate review')} · {catalog.source.checkedOn}</small></li>}
  <li><SourceLink href={workloadSources.find(s=>s.id==='pesticide')!.url}>{t('농약 품목별 사용기준','Pesticide product-use standards')}</SourceLink><small>{t('처방·사용량·살포 승인을 이 화면에서 대신하지 않습니다.','This page does not replace prescription, dosage or application approval.')}</small></li>

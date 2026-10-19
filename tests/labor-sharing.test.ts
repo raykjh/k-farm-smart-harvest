@@ -15,7 +15,8 @@ it('requires direct adjacency, available travel time and matching consented job 
  const w=worker(randomUUID()),o=offer(randomUUID(),w.id),j=job('job'),ops={...emptyLaborOps(),people:[w]};
  expect(eligibleShare(o,ops,j,['janggye'])).toBe(true);expect(eligibleShare(o,ops,j,[])).toBe(false);
  expect(eligibleShare({...o,sourceHash:'old'},ops,j,['janggye'])).toBe(false);
- w.startMinute=540;expect(eligibleShare(o,ops,j,['janggye'])).toBe(false);
+ w.startMinute=540;expect(eligibleShare(o,ops,j,['janggye'])).toBe(true);
+ expect(eligibleShare({...o,travelMinutes:600},ops,j,['janggye'])).toBe(false);
 });
 it('ranks confirmed neighbors after local attendees; prevents cross-center overlap; schedule changes invalidate attendance and notify both centers',async()=>{
  if(!process.env.DATABASE_URL?.endsWith('/kfarm_test'))throw Error('isolated DB required');

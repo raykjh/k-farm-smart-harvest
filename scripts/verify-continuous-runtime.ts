@@ -1,0 +1,37 @@
+import {db} from '../lib/db';
+import {createSession,AUTH_COOKIE,digest,type User} from '../lib/auth';
+import {readFileSync,writeFileSync} from 'node:fs';
+import {resolve} from 'node:path';
+import {createHash} from 'node:crypto';
+import {chromium,type Browser} from '@playwright/test';
+const url=new URL(process.env.DATABASE_URL??'');
+if(url.hostname!=='127.0.0.1'||url.port!=='55432'||url.pathname!=='/kfarm')throw Error('Operating local verification only');
+const dir=resolve('.data/sequential-intake-20261016'),hash=(x:unknown)=>createHash('sha256').update(JSON.stringify(x)).digest('hex');
+const snapshot=async()=>({centers:await db.center.findMany({orderBy:{id:'asc'}}),calls:await db.aiCall.count(),reservations:await db.workRecord.findMany({where:{kind:'resourceReservation'},orderBy:{id:'asc'}}),cycles:await db.workRecord.findMany({where:{kind:'cultivation'},orderBy:{id:'asc'}})});
+let token='',browser:Browser|undefined;
+try{
+ const before=await snapshot();console.log(JSON.stringify({step:'RESTART_STABILITY',calls:before.calls,fields:(before.centers.find(c=>c.id==='demo')!.state as any).fields.length}));
+ await new Promise(r=>setTimeout(r,65000));const after=await snapshot();
+ if(hash(before)!==hash(after))throw Error('Unchanged restart duplicated or changed confirmed data');
+ const state=after.centers.find(c=>c.id==='demo')!.state as any;
+ if(state.fields.length!==4||state.missions.length!==23||after.cycles.length!==4)throw Error('Sequential result counts changed');
+ if(new Set(state.missions.map((m:any)=>m.id)).size!==state.missions.length)throw Error('Duplicate tasks');
+ const reservations=after.reservations.map(r=>r.payload as any);
+ for(const [i,a] of reservations.entries())for(const b of reservations.slice(i+1))if(a.resourceId===b.resourceId&&Date.parse(a.from)<Date.parse(b.to)&&Date.parse(b.from)<Date.parse(a.to))throw Error('Overlapping equipment reservations');
+ const autoJobs=(await db.workRecord.findMany({where:{workspace:'sandbox',kind:'productionAutoJob'}})).map(r=>r.payload as any);
+ if(autoJobs.length!==4||autoJobs.some(j=>j.status!=='CONFIRMED'))throw Error('Automatic job and approval ledger disagree');
+ const labor=(await db.workRecord.findUniqueOrThrow({where:{workspace_kind_id:{workspace:'sandbox',kind:'laborOperations',id:'current'}}})).payload as any;
+ const current=labor.jobs.find((j:any)=>j.date==='2026-10-20');
+ if(!current||current.assigned.length!==2||current.durationMinutes<240)throw Error('Half-day confirmed staffing missing');
+ if(labor.jobs.some((j:any)=>j.status==='COMPLETED'||j.worked.length))throw Error('Future work was falsely marked completed');
+ const user=(await db.workRecord.findMany({where:{workspace:'auth',kind:'user'}})).map(r=>r.payload as User).find(u=>u.username==='gyebuk.staff'&&u.enabled)!;
+ token=await createSession(user.id);browser=await chromium.launch({headless:true});const context=await browser.newContext({viewport:{width:1440,height:1000}});
+ await context.addCookies([{name:AUTH_COOKIE,value:token,url:'http://127.0.0.1:3100'}]);const page=await context.newPage(),errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.goto('http://127.0.0.1:3100/?tab=fields');await page.getByRole('heading',{name:'관리 농지',exact:true}).waitFor();await page.getByRole('heading',{name:'관리 농지',exact:true}).scrollIntoViewIfNeeded();await page.screenshot({path:resolve(dir,'managed-fields.png')});
+ await page.goto('http://127.0.0.1:3100/?tab=schedule');const day=page.locator('summary').filter({hasText:'2026-10-20'}).first();await day.click();await day.scrollIntoViewIfNeeded();await page.screenshot({path:resolve(dir,'scheduled-autumn-task.png')});
+ await page.goto('http://127.0.0.1:3100/?tab=labor');const laborDay=page.getByRole('button',{name:'2026-10-20 2명',exact:true});await laborDay.waitFor();if(!(await laborDay.innerText()).includes('2명 배정'))throw Error('Confirmed staff not shown in calendar');await laborDay.scrollIntoViewIfNeeded();await page.screenshot({path:resolve(dir,'confirmed-labor.png')});
+ if(errors.length)throw Error('Browser runtime errors: '+errors.join(' / '));
+ const earlier=JSON.parse(readFileSync(resolve(dir,'evidence.json'),'utf8')),fourth=JSON.parse(readFileSync(resolve(dir,'autumn-evidence.json'),'utf8'));
+ const proof={at:new Date().toISOString(),steps:[...earlier.steps,fourth],realAi:earlier.ai,registeredWorkers:labor.people.length,confirmedLabor:{date:current.date,count:current.assigned.length,minutes:current.durationMinutes},jobs:labor.jobs.length,fields:state.fields.length,tasks:state.missions.length,cultivations:after.cycles.length,equipmentReservations:reservations.length,accounts:await db.workRecord.count({where:{workspace:'auth',kind:'user'}}),automaticJobs:autoJobs.map(j=>({requestId:j.requestId,status:j.status,source:j.source})),noExtraCallsAfterRestart:true,noEquipmentOverlap:true,previousPlansPreserved:true,noFabricatedCompletion:true,realSmsSent:0,browserErrors:errors};
+ writeFileSync(resolve(dir,'final-verification.json'),JSON.stringify(proof,null,2),{mode:0o600});console.log(JSON.stringify(proof));
+}finally{await browser?.close();if(token)await db.workRecord.deleteMany({where:{workspace:'auth',kind:'session',id:digest(token)}});await db.$disconnect()}

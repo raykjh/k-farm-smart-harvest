@@ -7,5 +7,5 @@ export async function testSession(role:Principal['role']='CENTER_ADMIN',centerId
  const id=randomUUID(),token=randomBytes(32).toString('hex');
  await db.workRecord.create({data:{...authKey('user',id),payload:{...testPrincipal,id,role,centerId,passwordHash:'not-a-password-login'}}});
  await db.workRecord.create({data:{...authKey('session',digest(token)),payload:{userId:id,expiresAt:Date.parse('2099-01-01')}}});
- return {id,token,headers:{cookie:`kfarm_session=${token}`,host:'127.0.0.1:3100',origin:'http://127.0.0.1:3100'},cleanup:()=>db.workRecord.deleteMany({where:{workspace:'auth',OR:[{kind:'user',id},{kind:'session',id:digest(token)}]}})};
+ return {id,token,principal:{...testPrincipal,id,role,centerId},headers:{cookie:`kfarm_session=${token}`,host:'127.0.0.1:3100',origin:'http://127.0.0.1:3100'},cleanup:()=>db.workRecord.deleteMany({where:{workspace:'auth',OR:[{kind:'user',id},{kind:'session',payload:{path:['userId'],equals:id}},{kind:'recovery',id}]}})};
 }

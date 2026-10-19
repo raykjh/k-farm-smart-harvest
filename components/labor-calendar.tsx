@@ -1,14 +1,16 @@
 'use client';
 import {useState} from 'react';
 import {useLanguage} from './language';
-import Modal from './modal';
-import {assignedWorkerCount,type LaborJob} from '@/lib/labor-operations';
-export default function LaborCalendar({demands,jobs,onDemand,onJob}:{demands:any[];jobs:LaborJob[];onDemand:(id:string)=>void;onJob:(j:LaborJob)=>void}){
+import {confirmedAttendanceCount} from '@/lib/labor-attendance-review';
+import type {LaborJob} from '@/lib/labor-operations';
+export default function LaborCalendar({demands,jobs,onDay}:{demands:any[];jobs:LaborJob[];onDay:(date:string)=>void}){
  const {locale}=useLanguage(),t=(a:string,b:string)=>locale==='ko'?a:b;
- const today=new Date(Date.now()+9*3600000).toISOString().slice(0,10),[selected,setSelected]=useState('');
- const year=Number(today.slice(0,4)),month=Number(today.slice(5,7));
- const [monthOffset,setMonthOffset]=useState(0);
- const current=demands.filter(d=>!d.completed);
- const forDay=(day:string)=>current.filter(d=>d.date===day);
- return <><div className="actions" aria-label={t('인력 달력 이동','Labor calendar navigation')}><button onClick={()=>{setMonthOffset(n=>n-1);setSelected('')}}>{t('이전 달 보기','Previous month')}</button><button onClick={()=>{setMonthOffset(0);setSelected('')}}>{t('이번 달','This month')}</button><button onClick={()=>{setMonthOffset(n=>n+1);setSelected('')}}>{t('다음 달 보기','Next month')}</button></div><div className="labor-calendars">{[monthOffset,monthOffset+1].map(offset=>{const date=new Date(Date.UTC(year,month-1+offset,1)),y=date.getUTCFullYear(),m=date.getUTCMonth(),leading=date.getUTCDay(),days=new Date(Date.UTC(y,m+1,0)).getUTCDate();return <section className="card" key={offset}><h3>{y} · {m+1}{t('월','')}</h3><div className="calendar-header">{(locale==='ko'?['일','월','화','수','목','금','토']:['Sun','Mon','Tue','Wed','Thu','Fri','Sat']).map(day=><span className="weeklabel" key={day}>{day}</span>)}</div><div className="calendar">{Array.from({length:Math.ceil((leading+days)/7)*7},(_,i)=>{const d=i-leading+1,valid=d>0&&d<=days,key=`${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`,ds=forDay(key),required=ds.reduce((n,x)=>n+x.count,0),assigned=ds.reduce((n,x)=>n+assignedWorkerCount(jobs.find(j=>j.missionId===x.id&&j.status==='OPEN')),0);return <button key={i} className={`day ${valid?'':'empty'} ${key===today?'today':''}`} disabled={!valid||!required} aria-label={`${key} ${required}${t('명',' people')}`} onClick={()=>setSelected(key)}>{valid&&<>{d}{required>0&&<span>{required}{t('명 필요',' needed')}<br/>{assigned}{t('명 배정',' assigned')}</span>}</>}</button>})}</div></section>})}</div>{selected&&<Modal title={selected+' · '+t('인력 배정','Labor assignment')} onClose={()=>setSelected('')}>{forDay(selected).map(d=>{const j=jobs.find(j=>j.missionId===d.id&&j.status!=='STALE');return <div className="task-row" key={d.id}><div className="task-info"><h3>{d.task}</h3><p>{d.address} · {d.durationMinutes}{t('분',' min')}</p></div><button className="badge" onClick={()=>{setSelected('');if(j)onJob(j);else onDemand(d.id)}}>{d.count}{t('명',' people')} · {j?t('명단 선택','Select workers'):t('모집 안내','Invite')}</button></div>})}</Modal>}</>;
+ const today=new Date(Date.now()+9*3600000).toISOString().slice(0,10),year=Number(today.slice(0,4)),month=Number(today.slice(5,7)),[offset,setOffset]=useState(0);
+ return <section className="labor-calendar-section" aria-label={t('인력 달력','Labor calendar')}><div className="actions labor-calendar-controls"><button onClick={()=>setOffset(n=>n-1)}>{t('이전 달 보기','Previous month')}</button><button onClick={()=>setOffset(0)}>{t('이번 달','This month')}</button><button onClick={()=>setOffset(n=>n+1)}>{t('다음 달 보기','Next month')}</button></div><div className="labor-calendars">{[offset,offset+1].map(n=>{
+  const date=new Date(Date.UTC(year,month-1+n,1)),y=date.getUTCFullYear(),m=date.getUTCMonth(),leading=date.getUTCDay(),days=new Date(Date.UTC(y,m+1,0)).getUTCDate();
+  return <section className="card" key={n}><h3>{y} · {m+1}{t('월','')}</h3><div className="calendar-header">{(locale==='ko'?['일','월','화','수','목','금','토']:['Sun','Mon','Tue','Wed','Thu','Fri','Sat']).map(day=><span className="weeklabel" key={day}>{day}</span>)}</div><div className="calendar">{Array.from({length:Math.ceil((leading+days)/7)*7},(_,i)=>{
+   const d=i-leading+1,valid=d>0&&d<=days,key=`${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`,ds=demands.filter(x=>x.date===key),needed=ds.reduce((sum,x)=>sum+x.count,0),attending=ds.reduce((sum,x)=>sum+confirmedAttendanceCount(jobs.find(j=>j.missionId===x.id&&j.status!=='STALE')),0);
+   return <button key={i} className={`day ${valid?'':'empty'} ${key===today?'today':''} ${needed>attending?'labor-shortage':needed?'labor-filled':''}`} disabled={!valid||!needed} aria-label={`${key} ${t('필요인력','Needed')} ${needed} ${t('참석인력','Attending')} ${attending}`} onClick={()=>onDay(key)}>{valid&&<><strong>{d}</strong>{needed>0&&<span className="labor-day-counts"><span>{t('필요','Need')} <b>{needed}</b></span><span>{t('참석','Yes')} <b>{attending}</b></span></span>}</>}</button>
+  })}</div></section>;
+ })}</div></section>;
 }

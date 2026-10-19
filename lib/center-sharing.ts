@@ -1,4 +1,5 @@
 import type {Machine} from './types';
+import {equipmentDownOn} from './equipment-downtime';
 
 /** Myeon is the service boundary, not an equipment ownership boundary. */
 export type ServiceCenter = {id:string; name:string; regionCode:string; regionType:'MYEON'; staffIds:string[]; neighborCenterIds:string[]};
@@ -20,6 +21,7 @@ export function validateLoan(loan:EquipmentLoan, existing:EquipmentLoan[]){
  return loan;
 }
 export function machineAvailableToCenter(machine:Machine,date:string,sharing?:CenterSharing){
+ if(equipmentDownOn(machine,date))return false;
  if(!sharing)return !machine.ownerCenterId||machine.ownerCenterId==='demo'; // Legacy local center; foreign equipment still requires a loan.
  if(!machine.ownerCenterId)return false; // No inferred ownership in shared mode.
  const loans=sharing.loans.filter(l=>l.machineId===machine.id&&l.ownerCenterId===machine.ownerCenterId&&l.status==='CONFIRMED'&&l.usableFrom<=date&&date<=l.usableUntil);

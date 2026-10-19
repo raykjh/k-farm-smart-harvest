@@ -47,8 +47,11 @@ it('withdraws booked support atomically, blocks stale approval, keeps the date w
   const saved=(await db.center.findUniqueOrThrow({where:{id:'janggye'}})).state as unknown as State;expect(saved.missions.find(t=>t.id===closed.id)).toEqual(closed);expect(saved.missions.find(t=>t.id===m.id)).toMatchObject({scheduledDate:day,laborSupportIds:[ids[1]]});expect(saved.missions.find(t=>t.id===m.id)?.laborRecoveryRequired).toBeUndefined();
   expect((await send(recoveryGet,'labor-recovery',receiver)).issues[0]).toMatchObject({status:'RESOLVED',resolution:'REPLANNED'});
   expect((await send(laborGet,'labor-operations',receiver)).payload.jobs[0].borrowedNames).toEqual([]);
-  await send(share,'labor-sharing',owner,{...offer,requestId:randomUUID(),workerId:second.id});
-  expect((await send(laborGet,'labor-operations',receiver)).payload.jobs[0].borrowedNames).toEqual(['홍대체']);
+  // Replanning now reserves a half-day. Attendance must be linked to the new
+  // job's duration/hash, not the retired one-hour invitation.
+  const renewed=(await send(laborGet,'labor-operations',receiver)).payload.jobs.find((job:any)=>job.status==='OPEN');
+  await send(share,'labor-sharing',owner,{...offer,jobId:renewed.id,sourceHash:renewed.sourceHash,requestId:randomUUID(),workerId:second.id});
+  expect((await send(laborGet,'labor-operations',receiver)).payload.jobs.find((job:any)=>job.id===renewed.id).borrowedNames).toEqual(['홍대체']);
   for(const s of [owner,receiver])expect((await send(capacityGet,'labor-capacity',s)).notices.some((n:any)=>n.event==='WITHDRAWN')).toBe(true);
  }finally{await owner.cleanup();await receiver.cleanup();await foreign.cleanup();await fixture.cleanup()}
 });

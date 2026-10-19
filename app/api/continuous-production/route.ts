@@ -5,6 +5,7 @@ import {centerDefinition} from '@/lib/center-registry';
 import {db} from '@/lib/db';
 import {withAuth} from '@/lib/auth-route';
 import {actorLabel,currentPrincipal} from '@/lib/auth';
+import {canConfirmProduction} from '@/lib/auth-policy';
 import {productionCriteria,serviceTerm} from '@/lib/continuous-production';
 import {productionKey,lockProduction,readProductionSource,refreshProduction,approveProduction,changeParticipation} from '@/lib/production-service';
 import {reviewProductionCrop,returnToRuleReview} from '@/lib/production-ai-review';
@@ -21,7 +22,7 @@ const command=z.discriminatedUnion('action',[
 export const GET=withAuth('continuous-production',async()=>{
  const result=await db.$transaction(async tx=>{
   const source=await readProductionSource(tx),row=await tx.workRecord.findUnique(productionKey('continuousProduction')),criteria=await tx.workRecord.findUnique(productionKey('productionCriteria'));
-  return {view:row?.payload??null,criteria:source.criteria,criteriaVersion:criteria?.version??0,canManage:currentPrincipal()?.role==='CENTER_ADMIN',center:centerDefinition(activeCenterId()),demoSourceBatchId:source.state?.demoResourceBatchId??(activeCenterId()==='demo'?'crop30-local-input':null)};
+  return {view:row?.payload??null,criteria:source.criteria,criteriaVersion:criteria?.version??0,canManage:currentPrincipal()?.role==='CENTER_ADMIN',canApprove:canConfirmProduction(currentPrincipal(),row?.payload),center:centerDefinition(activeCenterId()),demoSourceBatchId:source.state?.demoResourceBatchId??(activeCenterId()==='demo'?'crop30-local-input':null)};
  });
  return NextResponse.json(result);
 });
@@ -32,7 +33,14 @@ export const POST=withAuth('continuous-production',async req=>{
   if(b.action==='rule-review')return NextResponse.json(await returnToRuleReview(b.fingerprint,actor));
   const result=await db.$transaction(async tx=>{
    if(b.action==='refresh')return {view:await refreshProduction(tx)};
-   if(b.action==='approve')return approveProduction(tx,{requestId:b.requestId,fingerprint:b.fingerprint,pnus:b.pnus},actor);
+   if(b.action==='approve'){
+    await lockProduction(tx);
+    const receipt=await tx.workRecord.findUnique(productionKey('productionApproval',b.requestId));
+    const reviewed=await tx.workRecord.findUnique(productionKey('continuousProduction'));
+    if(!receipt&&!canConfirmProduction(currentPrincipal(),reviewed?.payload))throw Error('담당자는 검증된 AI 계획을 확인한 뒤 확정할 수 있습니다.');
+    // Replays still verify the original actor and exact command in the service.
+    return approveProduction(tx,{requestId:b.requestId,fingerprint:b.fingerprint,pnus:b.pnus},actor);
+   }
    if(b.action==='participation')return {view:await changeParticipation(tx,b.pnu,b,actor)};
    await lockProduction(tx);
    const owner=await tx.center.findUniqueOrThrow({where:{id:activeCenterId()}}),demoBatch=(owner.state as {demoResourceBatchId?:string}).demoResourceBatchId;

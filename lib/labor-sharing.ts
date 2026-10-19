@@ -7,7 +7,7 @@ import {availableFor,laborScore,emptyLaborOps,type LaborOps,type LaborJob} from 
 import {capacityBusy,laborCapacityRows,capacityAllowsAttendance} from './labor-capacity-store';
 import type {LaborCapacityWindow} from './labor-capacity';
 
-export type LaborShare={id:string;ownerCenterId:string;borrowerCenterId:string;workerId:string;workerName:string;jobId:string;sourceHash:string;date:string;startMinute:number;durationMinutes:number;travelMinutes:number;distanceKm:number;response:'APP'|'PHONE';consent:true;status:'WAITLIST'|'ASSIGNED'|'CANCELLED'|'COMPLETED';reason:string;actor:string;createdAt:string;worked?:boolean};
+export type LaborShare={id:string;ownerCenterId:string;borrowerCenterId:string;workerId:string;workerName:string;jobId:string;sourceHash:string;date:string;startMinute:number;durationMinutes:number;travelMinutes:number;distanceKm:number;response:'APP'|'SMS'|'PHONE';consent:true;status:'WAITLIST'|'ASSIGNED'|'CANCELLED'|'COMPLETED';reason:string;actor:string;createdAt:string;worked?:boolean};
 export const laborSharingLock=async(tx:Prisma.TransactionClient)=>{await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'labor-sharing'}))`};
 const json=(v:unknown)=>JSON.parse(JSON.stringify(v));
 export function shareOverlap(a:Pick<LaborShare,'date'|'startMinute'|'durationMinutes'|'travelMinutes'>,b:Pick<LaborShare,'date'|'startMinute'|'durationMinutes'|'travelMinutes'>){return a.date===b.date&&a.startMinute-a.travelMinutes<b.startMinute+b.durationMinutes+b.travelMinutes&&b.startMinute-b.travelMinutes<a.startMinute+a.durationMinutes+a.travelMinutes;}

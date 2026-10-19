@@ -3,9 +3,9 @@ import {createContext,useContext,useEffect,useState,Children,isValidElement,clon
 import {translate} from '@/lib/i18n';
 export type Locale='ko'|'en';
 const LanguageContext=createContext<{locale:Locale;setLocale:(l:Locale)=>void}>({locale:'ko',setLocale:()=>{}});
-export function LanguageProvider({children}:{children:ReactNode}){
- const [locale,setLanguage]=useState<Locale>('ko');
- useEffect(()=>{try{if(localStorage.getItem('kfarm.locale')==='en')setLanguage('en')}catch{}},[]);
+export function LanguageProvider({children,defaultLocale='ko'}:{children:ReactNode;defaultLocale?:Locale}){
+ const [locale,setLanguage]=useState<Locale>(defaultLocale);
+ useEffect(()=>{try{const saved=localStorage.getItem('kfarm.locale');if(saved==='en'||saved==='ko')setLanguage(saved)}catch{}},[]);
  useEffect(()=>{document.documentElement.lang=locale;document.title=locale==='ko'?'K-Farm | 지역 농업 지원센터':'K-Farm | Regional Agriculture Support Center'},[locale]);
  function setLocale(l:Locale){setLanguage(l);try{localStorage.setItem('kfarm.locale',l)}catch{}}
  return <LanguageContext.Provider value={{locale,setLocale}}>{children}</LanguageContext.Provider>;

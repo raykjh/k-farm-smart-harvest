@@ -1,8 +1,9 @@
 import {crewCapacityLimits} from './operating-capacity';
+import {laborShiftSlots} from './labor-shift';
 import {withLaborSupport,laborCapacityBlocks} from './labor-capacity';
 import {withNamedOperators} from './named-operators';
 import {operatingTaskCrew} from './planned-labor-demand';
-import {isClosedTask} from './task-lifecycle';
+import {isClosedTask,isRecordedOptionalCancellation} from './task-lifecycle';
 import type {AnnualPlan} from './annual-plan';
 import {machineAvailableToCenter} from './center-sharing';
 import type {State,Mission} from './types';
@@ -31,7 +32,7 @@ export async function previewAnnualDispatch(plan:AnnualPlan,state:State,today=ne
  for(const plot of plan.plots)for(const task of plot.tasks){
   const operationKey=task.operationKey??[plan.year,plot.pnu,plot.crop,task.id.split(':').at(-1)].join(':');
   if(state.missions.some(m=>m.id===task.id||missionKeys(m).includes(operationKey))){wait(task.id,'기존 계획·실적 연결됨');continue;}
-  if(state.missions.some(m=>m.fieldId===plot.pnu&&m.scheduledDate?.startsWith(plan.year+'-')&&!missionKeys(m)[0])){wait(task.id,'기존 작업 단계 연결 확인 필요: 중복 배차 차단');continue;}
+  if(state.missions.some(m=>m.fieldId===plot.pnu&&m.scheduledDate?.startsWith(plan.year+'-')&&!isClosedTask(m.status)&&!missionKeys(m)[0])){wait(task.id,'기존 작업 단계 연결 확인 필요: 중복 배차 차단');continue;}
   if(!task.predecessorKeys){wait(task.id,'선후행 규칙이 포함된 최신 초안 생성 필요');continue;}
   if('executionBlocked' in task&&task.executionBlocked){wait(task.id,task.executionBlocked);continue;}
   if(!task.window){wait(task.id,'작업 기간 확인 필요');continue;}
@@ -43,7 +44,8 @@ export async function previewAnnualDispatch(plan:AnnualPlan,state:State,today=ne
   if(!Number.isFinite(lower)||!Number.isFinite(upper)||upper-lower>731*32){wait(task.id,'작업 기간 확인 필요');continue;}
   for(const machine of resources){
    const workArea='workAreaM2' in task?task.workAreaM2:plot.area;
-   const duration=Math.max(1,Math.ceil(((machine?workArea/10000/machine.capacityHaHour*60:workArea/1000*req.laborMinutesPer1000m2!)+req.setupMinutes)/15-1e-9));
+   const workDuration=Math.max(1,Math.ceil(((machine?workArea/10000/machine.capacityHaHour*60:workArea/1000*req.laborMinutesPer1000m2!)+req.setupMinutes)/15-1e-9));
+   const duration=machine?workDuration:laborShiftSlots(workDuration);
    if(!Number.isFinite(duration)||duration>32)continue;
    const allowed:number[]=[];
    for(let day=lower;day<upper;day+=32){
@@ -71,6 +73,7 @@ export async function previewAnnualDispatch(plan:AnnualPlan,state:State,today=ne
    const generated=candidates.filter(other=>keyMatches(key,other.operationKey));
    if(!records.length&&!generated.length){wait(c.task.id,'선행 작업의 계획·실적 확인 필요');break;}
    for(const m of records){
+    if(isRecordedOptionalCancellation(m))continue;
     if(!m.scheduledDate||['CANCELLED','HELD','UNSTAFFED'].includes(m.status)||!Number.isInteger(m.start)||!Number.isInteger(m.duration)){wait(c.task.id,'선행 작업의 계획·실적 확인 필요');break;}
     c.predecessorMissionIds.push(m.id);
     earliest=Math.max(earliest,dateSlot(m.scheduledDate)+(m.start%32+32)%32+m.duration);
@@ -106,7 +109,7 @@ export async function previewAnnualDispatch(plan:AnnualPlan,state:State,today=ne
   if(result.status==='FEASIBLE'){
    optimal=result.optimal;
    for(const c of eligible){const a=result.assignments.find(a=>a.id===c.job.id);if(!a){wait(c.job.id,'확인된 작업기간 안에 자원 여유 없음');continue;}
-    assignments.push({taskId:c.task.id,operationKey:c.operationKey,predecessorMissionIds:[...new Set(c.predecessorMissionIds)],pnu:c.plot.pnu,date:slotDate(a.start),machineId:assignedResource(c.job,a),...(a.operatorIds?{operatorIds:a.operatorIds}:{}),...(a.laborSupportIds?{laborSupportIds:a.laborSupportIds}:{}),owner:c.req.owner,staff:c.job.staff,transport:c.job.transport,startMinute:480+(a.start%32+32)%32*15,durationMinutes:assignedDuration(c.job,a)*15,status:'CAPACITY_PREVIEW_ONLY'});
+    assignments.push({taskId:c.task.id,operationKey:c.operationKey,predecessorMissionIds:[...new Set(c.predecessorMissionIds)],pnu:c.plot.pnu,date:slotDate(a.start),machineId:assignedResource(c.job,a),...(a.operatorIds?{operatorIds:a.operatorIds}:{}),...(a.laborSupportIds?{laborSupportIds:a.laborSupportIds}:{}),owner:c.req.owner==='농부'?'센터 인력':c.req.owner,staff:c.job.staff,transport:c.job.transport,startMinute:480+(a.start%32+32)%32*15,durationMinutes:assignedDuration(c.job,a)*15,status:'CAPACITY_PREVIEW_ONLY'});
    }
   }else for(const c of eligible)wait(c.job.id,result.reason);
  }

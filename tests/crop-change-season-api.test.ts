@@ -1,0 +1,43 @@
+import {it,expect} from 'vitest';
+import {randomUUID} from 'node:crypto';
+import {NextRequest} from 'next/server';
+import {db} from '../lib/db';
+import {fieldManagementFixture} from './field-management-fixture';
+import {testSession} from './auth-fixture';
+import {catalogContext} from './catalog-fixtures';
+import {buildAnnualPlan} from '../lib/annual-plan';
+import {cropChangeToday} from '../lib/crop-change-options';
+import {GET as options} from '../app/api/crop-change-options/route';
+import {POST as change} from '../app/api/cultivation-change/route';
+import type {State} from '../lib/types';
+const json=(v:unknown)=>JSON.parse(JSON.stringify(v));
+it('replaces an old crop with a next-year season, preserves completion, rejects stale options and replays approval',async()=>{
+ const fixture=await fieldManagementFixture(),staff=await testSession('CENTER_STAFF'),other=await testSession('CENTER_STAFF','janggye');
+ const key={workspace:'sandbox',kind:'productionCriteria',id:'season-test'},id=randomUUID();
+ const request=(path:string,body?:unknown,headers=staff.headers)=>new NextRequest('http://localhost/api/'+path,{headers,...(body?{method:'POST',body:JSON.stringify(body)}:{})});
+ try{
+  const year=Number(cropChangeToday().slice(0,4)),cycle={id,pnu:fixture.field.pnu,crop:'potato' as const,start:`${year}-01-01`,end:`${year}-12-07`,source:'REGISTERED' as const},field={...fixture.field,crop:'potato' as const};
+  const oldPlan=buildAnnualPlan([field],year,1,{region:'계북면'},cycle);
+  const s=structuredClone(fixture.state);s.fields[0].crop='감자';
+  const m={id:'old-completed',fieldId:field.pnu,cultivationId:id,crop:'감자' as const,label:'이전 수확',scheduledDate:`${year}-01-01`,month:1,owner:'센터 인력' as const,resourceId:null,start:0,duration:8,staff:1,transport:0,priority:1,batchKey:'old',deadline:32,status:'COMPLETED' as const};
+  s.missions=[m,{...m,id:'old-future',label:'이전 정리',status:'PLANNED',scheduledDate:`${year}-12-07`}];
+  await db.center.update({where:{id:'demo'},data:{state:json(s)}});
+  await db.workRecord.update({where:{workspace_kind_id:{workspace:'sandbox',kind:'fields',id:'current'}},data:{payload:json([field])}});
+  await db.workRecord.createMany({data:[{workspace:'sandbox',kind:'cultivation',id,payload:json(cycle)},{workspace:'sandbox',kind:'cultivationPlan',id,payload:json(oldPlan)},{...key,payload:json({profiles:[{id:'season',name:'테스트 작기',context:catalogContext()}]})}]});
+  const list=await options(request('crop-change-options?pnu='+field.pnu)),v=await list.json();expect(list.status,JSON.stringify(v)).toBe(200);
+  expect((await options(request('crop-change-options?pnu='+field.pnu,undefined,other.headers))).status).toBe(409);
+  const candidate=v.choices.find((c:any)=>c.crop==='soybean'&&c.season==='NEXT_YEAR');expect(candidate).toBeTruthy();expect(candidate.context).toBeUndefined();
+  const body={id,crop:candidate.crop,area:field.area,candidateId:candidate.id,action:'preview'};
+  expect((await change(request('cultivation-change',{...body,area:2000}))).status).toBe(409);
+  expect((await change(request('cultivation-change',{...body,candidateId:'0'.repeat(64)}))).status).toBe(409);
+  const response=await change(request('cultivation-change',body)),review=await response.json();expect(response.status,JSON.stringify(review)).toBe(200);expect(review.blockers).toEqual([]);
+  expect((await db.center.findUniqueOrThrow({where:{id:'demo'}})).state).toEqual(s);
+  const approval={...body,action:'approve',token:review.token,review:{cost:'기존 범위 검토',consent:'소유주 위임 범위 내 변경'}};
+  const saved=await change(request('cultivation-change',approval));expect(saved.status,await saved.clone().text()).toBe(200);
+  const after=(await db.center.findUniqueOrThrow({where:{id:'demo'}})).state as unknown as State;
+  expect(after.missions.find(t=>t.id===m.id)).toEqual(m);expect(after.missions.some(t=>t.id==='old-future')).toBe(false);
+  expect(after.missions.filter(t=>t.status!=='COMPLETED').every(t=>t.scheduledDate?.startsWith(String(year+1)))).toBe(true);
+  expect((await db.workRecord.findUniqueOrThrow({where:{workspace_kind_id:{workspace:'sandbox',kind:'cultivation',id}}})).payload).toMatchObject({crop:'soybean',start:candidate.start,end:candidate.end});
+  expect((await (await change(request('cultivation-change',approval))).json()).alreadyApplied).toBe(true);
+ }finally{await db.workRecord.deleteMany({where:key});await staff.cleanup();await other.cleanup();await fixture.cleanup();}
+},60000);

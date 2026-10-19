@@ -69,14 +69,14 @@ it('uses consultation identity to avoid double booking a farmer across newly reg
  expect(r.assignments).toHaveLength(1);expect(r.feasibility.some(f=>f.status==='INCOMPLETE')).toBe(true);
 });
 
-it('keeps farmer versus center labor demands consistent before and after persistence',async()=>{
- const s=state(),p=plan([plot('joint')]);s.staffCount=0;s.transportCount=0;
+it('normalizes legacy farmer work to ordinary center labor before and after persistence',async()=>{
+ const s=state(),p=plan([plot('joint')]);s.staffCount=2;s.transportCount=0;
  Object.assign(p.plots[0].tasks[0].requirements,{machineCode:null,owner:'농부',staff:2,transport:0,laborMinutesPer1000m2:60});
  const initial=await previewAnnualDispatch(p,s,today);
- expect(initial.assignments[0]).toMatchObject({staff:0,transport:0,owner:'농부'});
+ expect(initial.assignments[0]).toMatchObject({staff:2,transport:0,owner:'센터 인력',durationMinutes:240});
  const saved=appendAssignments(s,p,initial),r=await calculateAnnualReplan(saved,{ids:['joint'],preferred:second,scope:'PRESERVE'},weather,today);
  expect(r.status).toBe('FEASIBLE');expect(r.diff[0].date).toBe(second);
- Object.assign(p.plots[0].tasks[0].requirements,{owner:'센터 인력',staff:0});
+ s.staffCount=0;Object.assign(p.plots[0].tasks[0].requirements,{owner:'센터 인력',staff:1});
  expect((await previewAnnualDispatch(p,s,today)).assignments).toHaveLength(0);
 });
 

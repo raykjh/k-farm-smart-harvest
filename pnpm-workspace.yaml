@@ -4,6 +4,8 @@ allowBuilds:
   '@prisma/client': true
   '@prisma/engines': true
   '@embedded-postgres/windows-x64': true
+  # Linux hosting uses a separate PostgreSQL service, not an embedded database.
+  '@embedded-postgres/linux-x64': false
   prisma: true
   esbuild: true
   sharp: true

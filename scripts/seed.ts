@@ -1,4 +1,3 @@
-import {db} from '../lib/db';
-import {initialState} from '../lib/seed';
-async function main(){ await db.center.upsert({where:{id:'demo'},create:{id:'demo',state:initialState()},update:{}}); console.log('Demo center initialized (existing data preserved).'); await db.$disconnect(); }
-main();
+// Fail closed for old onboarding instructions; do not load any database module.
+console.error('LEGACY_DEMO_WORKFLOW_RETIRED: Fixed-snapshot seeding is retired. Use scripts/initialize-centers.ts for empty centers, then ordinary registration and planning. No records were changed.');
+process.exitCode=1;

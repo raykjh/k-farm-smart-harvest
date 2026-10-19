@@ -3,7 +3,6 @@ import {randomUUID} from 'node:crypto';
 import {db} from '../lib/db';
 import {createAccount,authKey,login,digest,authenticate,changePassword,type User} from '../lib/auth';
 import {issueRecoveryCode,recoverAccount} from '../lib/account-recovery';
-import {testPrincipal} from './auth-fixture';
 import {testSession} from './auth-fixture';
 import {POST as accountsPost} from '../app/api/accounts/route';
 import {GET as fields} from '../app/api/fields/route';
@@ -20,9 +19,9 @@ it('blocks temporary sessions and lets authorized administrator reset subordinat
  }finally{await admin.cleanup();await staff.cleanup();await db.audit.deleteMany({where:{detail:{path:['actorId'],equals:admin.id}}})}
 });
 it('temporary password changes revoke sessions; one-time recovery rotates and revokes',async()=>{
- const username='recovery-'+randomUUID(),password='Initial-'+randomUUID(),next='Next-'+randomUUID(),third='Recovery-'+randomUUID();let id='';
+ const admin=await testSession('SUPER_ADMIN',null),username='recovery-'+randomUUID(),password='Initial-'+randomUUID(),next='Next-'+randomUUID(),third='Recovery-'+randomUUID();let id='';
  try{
- const user=await createAccount({username,password,name:'Recovery test',role:'SUPER_ADMIN',centerId:null},{...testPrincipal,role:'SUPER_ADMIN',centerId:null});id=user.id;expect(user.mustChangePassword).toBe(true);
+ const user=await createAccount({username,password,name:'Recovery test',role:'SUPER_ADMIN',centerId:null},admin.principal);id=user.id;expect(user.mustChangePassword).toBe(true);
  const session=await login(username,password),request=new Request('http://localhost',{headers:{cookie:`kfarm_session=${session.token}`}});
  await expect(changePassword(user,{currentPassword:password,newPassword:password})).rejects.toThrow();
  const changed=await changePassword(user,{currentPassword:password,newPassword:next});expect(changed.mustChangePassword).toBe(false);expect(await authenticate(request)).toBeNull();
@@ -35,5 +34,6 @@ it('temporary password changes revoke sessions; one-time recovery rotates and re
  }finally{
  await db.workRecord.deleteMany({where:{workspace:'auth',OR:[{kind:'user',id},{kind:'recovery',id},{kind:'session',payload:{path:['userId'],equals:id}},{kind:{in:['loginLimit','recoveryLimit']},id:digest(username)}]}});
  await db.audit.deleteMany({where:{OR:[{detail:{path:['actorId'],equals:id}},{detail:{path:['userId'],equals:id}}]}});
+ await admin.cleanup();
  }
 });

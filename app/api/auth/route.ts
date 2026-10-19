@@ -5,17 +5,25 @@ import {submitApplication} from '@/lib/account-applications';
 import {db} from '@/lib/db';
 import {validOrigin} from '@/lib/auth-route';
 import {issueRecoveryCode,recoverAccount} from '@/lib/account-recovery';
-import {secureSessionCookie} from '@/lib/application-origin';
+import {secureSessionCookie,validApplicationRequest} from '@/lib/application-origin';
+import {personalSettings,savePersonalProfile,requestPasswordRecovery} from '@/lib/personal-settings';
 export const dynamic='force-dynamic';
-export async function GET(req:Request){try{return NextResponse.json({user:await authenticate(req)},{headers:{'Cache-Control':'no-store'}})}catch{return NextResponse.json({error:'인증 서비스 확인 필요'},{status:503})}}
+export async function GET(req:Request){if(!validApplicationRequest(req))return NextResponse.json({error:'출처 거부'},{status:403});try{return NextResponse.json({user:await authenticate(req)},{headers:{'Cache-Control':'no-store'}})}catch{return NextResponse.json({error:'인증 서비스 확인 필요'},{status:503})}}
 export async function POST(req:Request){
  if(!validOrigin(req))return NextResponse.json({error:'출처 거부'},{status:403});
  try{
  const raw=await req.text();if(raw.length>4096)throw Error('입력 크기 초과');const b=JSON.parse(raw);let token:string,persistent=true;
+ if(!['login','logout','personalSettings'].includes(b.action)&&(await authenticate(req))?.judgeAccount)return NextResponse.json({error:'Public trial account settings cannot be changed.'},{status:403});
  if(b.action==='logout'){
   const old=sessionToken(req);if(old)await db.workRecord.deleteMany({where:authKey('session',digest(old))});const r=NextResponse.json({ok:true});r.cookies.set(AUTH_COOKIE,'',{httpOnly:true,sameSite:'strict',secure:secureSessionCookie(req),path:'/',maxAge:0});return r;
  }
  let user;
+ if(['personalSettings','saveProfile','requestRecovery'].includes(b.action)){
+  const current=await authenticate(req);if(!current)return NextResponse.json({error:'로그인 필요'},{status:401});
+  if(current.mustChangePassword)return NextResponse.json({error:'임시 비밀번호를 먼저 변경해주세요.'},{status:403});
+  const result=b.action==='personalSettings'?await personalSettings(current):b.action==='requestRecovery'?await requestPasswordRecovery(current):await savePersonalProfile(current,b.input);
+  return NextResponse.json(result,{headers:{'Cache-Control':'no-store'}});
+ }
  if(b.action==='signup')return NextResponse.json(await submitApplication(b.application),{headers:{'Cache-Control':'no-store'}});
  if(b.action==='recover')return NextResponse.json(await recoverAccount({username:b.username,code:b.code,newPassword:b.newPassword}),{headers:{'Cache-Control':'no-store'}});
  if(b.action==='recoveryCode'){

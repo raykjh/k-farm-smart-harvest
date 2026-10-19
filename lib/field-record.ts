@@ -1,6 +1,7 @@
 import {z} from 'zod';
 import {fieldConditions} from './field-conditions';
 import {optionalCropSchema} from './crop-registry';
+import {parcelBoundarySchema} from './parcel-boundary';
 export const fieldEntry=z.object({
  pnu:z.string().regex(/^\d{19}$/),address:z.string().trim().min(1).max(200),
  crop:optionalCropSchema,group:z.string().max(60),
@@ -8,6 +9,7 @@ export const fieldEntry=z.object({
  rights:z.literal('pending'),
  consultationId:z.string().uuid().optional(),
  conditions:fieldConditions.optional(),
+ boundary:parcelBoundarySchema.optional(),
 }).strict();
 export const fieldInventory=z.array(fieldEntry).max(1000).superRefine((items,ctx)=>{
  if(new Set(items.map(p=>p.pnu)).size!==items.length)ctx.addIssue({code:'custom',message:'중복 PNU'});

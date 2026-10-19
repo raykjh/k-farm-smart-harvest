@@ -24,7 +24,6 @@ async function handleGET(req:NextRequest){try{
  return NextResponse.json({version:plan?.version??0,plan:plan?.payload??null,linkedWork,fieldVersion:fields[0]?.version??0,fieldCount:fields[0]?.payload.length??0,stale:!!plan&&plan.payload.fieldVersion!==(fields[0]?.version??0)},{headers:{'Cache-Control':'no-store'}});
  }catch{return NextResponse.json({error:'연간계획 조회 실패'},{status:400})}}
 async function handlePOST(req:NextRequest){
- const origin=req.headers.get('origin');if(!['127.0.0.1:3100','localhost:3100'].includes(req.headers.get('host')??'')||(origin&&!['http://127.0.0.1:3100','http://localhost:3100'].includes(origin)))return NextResponse.json({error:'허용되지 않은 출처'},{status:403});
  try{const b=z.object({workspace:z.enum(['operations','sandbox']).transform(()=>recordSpace()),year:z.number().int().min(2000).max(2200),version:z.number().int().nonnegative(),fieldVersion:z.number().int().nonnegative(),context:planningContext.optional()}).strict().parse(await req.json());
  const result=await db.$transaction(async tx=>{
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`fields:${b.workspace}`}))`;

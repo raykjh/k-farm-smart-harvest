@@ -47,7 +47,7 @@ it('runs authenticated offer -> receiver confirmation -> real reservation -> att
    await tx.$queryRaw`SELECT id FROM "Center" WHERE id='janggye' FOR UPDATE`;
    await syncChangedPlanReservations(tx,'janggye',recv,after,[m.id],'isolated API test');
    await tx.center.update({where:{id:'janggye'},data:{state:json(after),version:{increment:1}}});
-   await tx.workRecord.create({data:{workspace:recordSpace('janggye'),kind:'laborDemand',id:m.id,payload:{missionId:m.id}}});
+   await tx.workRecord.findUniqueOrThrow({where:{workspace_kind_id:{workspace:recordSpace('janggye'),kind:'laborDemand',id:m.id}}});
   });
   await capacity(owner,command('cancel',id,2),409);
   const ownView=await resourceView(db,(await db.center.findUniqueOrThrow({where:{id:'demo'}})).state as unknown as State,'demo');

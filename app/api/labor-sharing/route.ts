@@ -25,7 +25,7 @@ export const GET=withAuth('labor-sharing',async()=>{
  return NextResponse.json({centerId:id,canManage:currentPrincipal()?.role==='CENTER_ADMIN',version:own?.version??0,workers:ops.people.filter(p=>p.active&&p.employment!=='CENTER_RESERVE').map(p=>({id:p.id,name:p.name})),jobs,offers:offers.filter(s=>s.ownerCenterId===id||s.borrowerCenterId===id),notices:notices.map(r=>r.payload)});
 });
 const command=z.discriminatedUnion('action',[
- z.object({action:z.literal('offer'),requestId:z.string().uuid(),version:z.number().int().nonnegative(),borrowerCenterId:z.string().min(1),jobId:z.string().min(1),sourceHash:z.string().min(1),workerId:z.string().uuid(),response:z.enum(['APP','PHONE']),travelMinutes:z.number().int().min(0).max(240),distanceKm:z.number().min(0).max(300),consent:z.literal(true)}).strict(),
+ z.object({action:z.literal('offer'),requestId:z.string().uuid(),version:z.number().int().nonnegative(),borrowerCenterId:z.string().min(1),jobId:z.string().min(1),sourceHash:z.string().min(1),workerId:z.string().uuid(),response:z.enum(['APP','SMS','PHONE']),travelMinutes:z.number().int().min(0).max(240),distanceKm:z.number().min(0).max(300),consent:z.literal(true)}).strict(),
  z.object({action:z.literal('cancel'),requestId:z.string().uuid(),id:z.string().uuid(),version:z.number().int().positive(),reason:z.string().trim().min(1).max(500)}).strict(),
  z.object({action:z.literal('complete'),requestId:z.string().uuid(),id:z.string().uuid(),version:z.number().int().positive(),worked:z.boolean()}).strict(),
 ]);

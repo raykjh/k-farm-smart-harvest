@@ -39,11 +39,11 @@ it('generates human work only with an explicit labor productivity rule',async ()
  const s=registeredDemo().state;s.missions=completedSteps(input.pnu,2027,'pepper',['seed','soil']);s.fields=[];
  const p=buildAnnualPlan([{...input,crop:'pepper',mode:'full'}],2027,2,{operations:{pepper:{plant:{from:'2027-05-11',to:'2027-05-12',laborMinutesPer1000m2:30,staff:2,transport:0}}}});
  const a=(await previewAnnualDispatch(p,s,'2027-05-01')).assignments[0];
- expect(a).toMatchObject({machineId:null,owner:'센터 인력',staff:2,durationMinutes:120});
+ expect(a).toMatchObject({machineId:null,owner:'센터 인력',staff:2,durationMinutes:240});
  expect((await previewAnnualDispatch(p,{...s,staffCount:1},'2027-05-01')).assignments).toHaveLength(0);
 });
-it('does not duplicate legacy work whose semantic mapping is not confirmed',async ()=>{
- const s=registeredDemo().state;s.missions=[{id:'legacy',fieldId:input.pnu,scheduledDate:'2027-05-25',status:'COMPLETED'} as any];
+it('does not duplicate unfinished legacy work whose semantic mapping is not confirmed',async ()=>{
+ const s=registeredDemo().state;s.missions=[{id:'legacy',fieldId:input.pnu,scheduledDate:'2027-05-25',status:'PLANNED'} as any];
  expect((await previewAnnualDispatch(plan(),s,'2027-05-01')).assignments).toHaveLength(0);
  expect((await previewAnnualDispatch(plan(),s,'2027-05-01')).pending[0].reason).toContain('단계 연결');
 });

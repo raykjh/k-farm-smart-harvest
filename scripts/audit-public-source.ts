@@ -6,14 +6,14 @@ import {existsSync} from 'node:fs';
 import {lstat,readdir,readFile,mkdir,writeFile} from 'node:fs/promises';
 import {resolve,relative,extname} from 'node:path';
 import {parseEnv} from 'node:util';
-import {internalPublicationDocument} from './public-source-policy';
+import {internalPublicationDocument,PUBLIC_SOURCE_ROOT_FILES} from './public-source-policy';
 const root=process.cwd(),run=process.argv.find(a=>a.startsWith('--run='))?.slice(6);
 const profile=process.argv.find(a=>a.startsWith('--profile='))?.slice(10)??'review';
 assert(['review','public'].includes(profile),'Unknown source profile');
 assert(run&&/^[a-z0-9-]{1,60}$/.test(run),'Unique report name required');
 const folder=resolve('.data/publication');await mkdir(folder,{recursive:true});
 const dirs=['app','components','lib','prisma','scripts','solver','tests','e2e','data','docs'];
-const roots=['LICENSE','README.md','package.json','pnpm-lock.yaml','pnpm-workspace.yaml','.env.example','.gitignore','compose.yaml','instrumentation.ts','proxy.ts','next-env.d.ts','postcss.config.mjs','tsconfig.json','playwright.config.ts','playwright.adjacent.config.ts','playwright.isolated.config.ts','vitest.config.ts','vitest.adjacent.config.ts','vitest.centers.config.ts','AI-BUDGET-V2.md'];
+const roots=[...PUBLIC_SOURCE_ROOT_FILES];
 const ignoredDirs=new Set(['node_modules','.git','.next','.data','.local','.venv','__pycache__','.pytest_cache','coverage','playwright-report','blob-report']);
 const permittedExtensions=new Set(['.ts','.tsx','.js','.mjs','.cjs','.json','.yaml','.yml','.md','.txt','.css','.py','.prisma','.sql','.toml']);
 const thirdPartyData=new Set(['data/capacity/four-center-cadastre-2026-10-03.json','data/capacity/four-center-study-2026.json','lib/demo-parcels.json']);
@@ -40,7 +40,7 @@ async function inspect(path:string){
  if(/(?:^|\/)\.env(?:\.|$)/.test(rel)&&rel!=='.env.example')throw Error('Real environment file under source root: '+rel);
  if(/\.(?:log|dump|backup|sqlite\d?|db|pem|key|p12|pfx|pyc|tsbuildinfo)$/.test(rel))return;
  const file=await readFile(path),content=file.toString('utf8');
- const text=permittedExtensions.has(extname(path))||['LICENSE','Dockerfile','.gitignore','.env.example'].includes(rel.split('/').at(-1)!);
+ const text=permittedExtensions.has(extname(path))||['LICENSE','Dockerfile','.gitignore','.dockerignore','.env.example'].includes(rel.split('/').at(-1)!);
  if(!text)throw Error('Unreviewed source file type: '+rel);
  for(const [name,value] of secrets){const index=content.indexOf(value);if(index>=0)finding(rel,content,index,'current-secret:'+name);}
  for(const [name,value] of privateContacts){const index=content.indexOf(value);if(index>=0)finding(rel,content,index,name);}

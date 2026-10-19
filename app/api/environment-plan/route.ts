@@ -21,7 +21,6 @@ async function handleGET(){try{
  return NextResponse.json({fields:((r?.payload??[]) as unknown as FieldEntry[]).map(f=>({pnu:f.pnu,address:f.address,crop:f.crop,region:planningRegion(f)}))},{headers:{'Cache-Control':'no-store'}});
  }catch{return NextResponse.json({error:'농지 조회 실패'},{status:503});}}
 async function handlePOST(req:Request){
- if(!['http://127.0.0.1:3100','http://localhost:3100'].includes(req.headers.get('origin')??''))return NextResponse.json({error:'Origin rejected'},{status:403});
  try{
  const b=z.object({pnu:z.string().min(1),selection:environmentPlanningSchema,save:z.boolean().optional(),cultivationId:z.string().uuid().optional(),expectedVersion:z.number().int().nonnegative().optional(),growthReview:growthReviewSchema.optional(),forecastRegionConfirmed:z.boolean().optional()}).strict().parse(await req.json());
  if(b.growthReview)b.growthReview.reviewer=actorLabel();

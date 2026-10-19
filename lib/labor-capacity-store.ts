@@ -8,6 +8,7 @@ import {crewCapacityLimits} from './operating-capacity';
 import {missionResourceUse} from './scheduling-constraints';
 import {dateSlot,verifySchedule,type SchedulingJob} from './scheduling-engine';
 import {isClosedTask} from './task-lifecycle';
+import {reserveLaborWindows,isReserveSupport} from './center-reserve';
 import {localAbsenceWindows,recoveryRows,type LaborRecovery} from './labor-recovery-store';
 
 export const laborCapacityKey=(id:string)=>({workspace:'shared',kind:'laborCapacityWindow',id});
@@ -20,7 +21,9 @@ export function capacityPersonEligible(w:LaborCapacityWindow,ops:LaborOps){
 export async function readLaborCapacity(tx:Prisma.TransactionClient,id:string):Promise<LaborCapacityView>{
  const rows=await laborCapacityRows(tx),windows=rows.map(r=>r.payload as unknown as LaborCapacityWindow).filter(w=>w.status==='CONFIRMED'&&w.date>=capacityToday()&&(w.ownerCenterId===id||w.borrowerCenterId===id));
  const absences=(await localAbsenceWindows(tx,id)).filter(w=>w.date>=capacityToday()&&w.resolution!=='REPLACED').map(({workerId,date,startMinute,endMinute})=>({workerId,date,startMinute,endMinute}));
- if(!windows.length)return {incoming:[],outgoing:[],...(absences.length?{absences}:{})};
+ const roster=await tx.workRecord.findUnique({where:{workspace_kind_id:{workspace:recordSpace(id),kind:'laborOperations',id:'current'}}});
+ const reserves=reserveLaborWindows((roster?.payload??emptyLaborOps()) as unknown as LaborOps,id,capacityToday(),absences);
+ if(!windows.length)return {incoming:[],outgoing:[],...(reserves.length?{reserves}:{}),...(absences.length?{absences}:{})};
  const neighbors=await geographicNeighbors(tx,id),rosters=await tx.workRecord.findMany({where:{kind:'laborOperations',id:'current'}});
  const withdrawals=(await recoveryRows(tx,id)).map(r=>r.payload as unknown as LaborRecovery).filter(r=>r.kind==='SHARE_WITHDRAWAL'&&r.resolution!=='REPLACED');
  const incoming=windows.filter(w=>w.borrowerCenterId===id&&neighbors.includes(w.ownerCenterId)&&capacityPersonEligible(w,(rosters.find(r=>r.workspace===recordSpace(w.ownerCenterId))?.payload??emptyLaborOps()) as unknown as LaborOps)).map(w=>{
@@ -28,7 +31,7 @@ export async function readLaborCapacity(tx:Prisma.TransactionClient,id:string):P
   return excludedIntervals.length?{...w,excludedIntervals}:w;
  });
  // A revoked eligibility must never release the owner's reservation implicitly.
- return {incoming,outgoing:windows.filter(w=>w.ownerCenterId===id),...(absences.length?{absences}:{})};
+ return {incoming,outgoing:windows.filter(w=>w.ownerCenterId===id),...(reserves.length?{reserves}:{}),...(absences.length?{absences}:{})};
 }
 export async function capacityBusy(tx:Prisma.TransactionClient,id:string){return [...(await laborCapacityRows(tx)).map(r=>r.payload as unknown as LaborCapacityWindow).filter(w=>w.ownerCenterId===id&&w.status==='CONFIRMED'),...await localAbsenceWindows(tx,id)].map(w=>({workerId:w.workerId,date:w.date,startMinute:w.startMinute,durationMinutes:w.endMinute-w.startMinute}));}
 export async function assertCapacityRoster(tx:Prisma.TransactionClient,id:string,ops:LaborOps){
@@ -56,6 +59,9 @@ export async function syncLaborCapacityPlan(tx:Prisma.TransactionClient,id:strin
   const changed=old?.scheduledDate!==m?.scheduledDate||old?.start!==m?.start||old?.duration!==m?.duration||old?.status!==m?.status||supportKey(old?.laborSupportIds)!==supportKey(m?.laborSupportIds);
   if(!changed)continue;
   for(const windowId of new Set([...old?.laborSupportIds??[],...m?.laborSupportIds??[]])){
+   // Center employees are assigned/notified in the local attendance ledger,
+   // not fictitious inter-center borrowing records.
+   if(isReserveSupport(windowId))continue;
    const w=windows.find(w=>w.id===windowId);if(!w)throw Error('인력 지원 예약 연결 확인 필요');
    await notifyCapacity(tx,w,'PLAN_CHANGED',{missionId:taskId,date:m?.scheduledDate??null,task:m?.label??old?.label,status:m?.status??'REMOVED',attendanceReconfirmationRequired:true});
   }

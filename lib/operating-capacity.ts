@@ -1,8 +1,9 @@
 import type {Mission,State} from './types';
 import {isClosedTask} from './task-lifecycle';
+import {taskCrewStaff,ordinaryWorkerDemand} from './planned-labor-demand';
 
 export type CrewCapacity={operators:number;workers:number};
-type CrewMission=Pick<Mission,'owner'|'resourceId'|'staff'|'resourceOccupancyOnly'|'machineOperators'|'ordinaryWorkers'>;
+type CrewMission=Pick<Mission,'owner'|'resourceId'|'staff'|'resourceOccupancyOnly'|'machineOperators'|'ordinaryWorkers'|'farmerWorkers'>;
 const count=(n:number)=>Number.isInteger(n)&&n>=0;
 export function crewCapacityLimits(state:State):Record<string,number>|undefined{
  const c=state.crewCapacity;if(!c)return;
@@ -15,8 +16,8 @@ export function crewCapacityLimits(state:State):Record<string,number>|undefined{
  * Neither an old staff count nor an account is evidence of operator training. */
 export function operatingCrewDemands(state:State,m:CrewMission):Record<string,number>|undefined{
  if(!crewCapacityLimits(state))return;
- if(m.resourceOccupancyOnly||m.owner==='농부')return {};
- const staff=Math.max(1,m.staff),operators=m.machineOperators??0,workers=m.ordinaryWorkers??0;
+ if(m.resourceOccupancyOnly)return {};
+ const staff=taskCrewStaff(m),operators=m.machineOperators??0,workers=m.owner==='농부'?ordinaryWorkerDemand(m):m.ordinaryWorkers??0;
  if(!count(staff)||!count(operators)||!count(workers)||operators+workers>staff)throw Error('작업별 운영자·일반인력 수요 확인이 필요합니다.');
  const unknown=staff-operators-workers,center=state.centerSharing?.centerId??'demo';
  return {[`${center}:operators`]:operators+(m.resourceId?unknown:0),[`${center}:workers`]:workers+unknown};

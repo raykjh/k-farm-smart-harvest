@@ -5,7 +5,7 @@ import {createHash} from 'node:crypto';
 import {existsSync} from 'node:fs';
 import {readFile,lstat,mkdir,writeFile} from 'node:fs/promises';
 import {resolve,relative,sep,dirname} from 'node:path';
-import {internalPublicationDocument} from './public-source-policy';
+import {internalPublicationDocument,PUBLIC_SOURCE_ROOT_FILES} from './public-source-policy';
 const run=process.argv.find(a=>a.startsWith('--manifest='))?.slice(11);
 const target=process.argv.find(a=>a.startsWith('--destination='))?.slice(14);
 assert(run&&/^[a-z0-9-]{1,60}$/.test(run),'Audited manifest run required');
@@ -19,7 +19,7 @@ assert(report.status==='NO_PATTERN_MATCHES'&&report.published===false&&Array.isA
 assert(Array.isArray(report.entries)&&report.entries.length>0&&report.entries.length<5000,'Invalid source inventory');
 const held=new Set(['lib/demo-parcels.json','data/capacity/four-center-cadastre-2026-10-03.json','data/capacity/four-center-study-2026.json']);
 const sourceDirectories=new Set(['app','components','lib','prisma','scripts','solver','tests','e2e','data','docs']);
-const rootFiles=new Set(['LICENSE','README.md','package.json','pnpm-lock.yaml','pnpm-workspace.yaml','.env.example','.gitignore','compose.yaml','instrumentation.ts','proxy.ts','next-env.d.ts','postcss.config.mjs','tsconfig.json','playwright.config.ts','playwright.adjacent.config.ts','playwright.isolated.config.ts','vitest.config.ts','vitest.adjacent.config.ts','vitest.centers.config.ts','AI-BUDGET-V2.md']);
+const rootFiles=PUBLIC_SOURCE_ROOT_FILES;
 const staged:{path:string;bytes:Buffer;sha256:string}[]=[],seen=new Set<string>();
 for(const entry of report.entries){
  const path=entry.path;assert(typeof path==='string'&&!path.includes('\\')&&!path.startsWith('/')&&!path.includes(':')&&!path.split('/').some(p=>p==='..'||p==='.'||!p),'Invalid path');
@@ -28,7 +28,7 @@ for(const entry of report.entries){
  if(profile==='public')assert(!internalPublicationDocument(path),'Internal handoff in public manifest');
  assert(entry.review==='SOURCE_CANDIDATE','Unreviewed item');
  assert(path.includes('/')?sourceDirectories.has(path.split('/')[0]):rootFiles.has(path),'Unapproved source root');
- assert(path==='.env.example'||path==='.gitignore'||!path.split('/').some(p=>p.startsWith('.')||['node_modules','__pycache__','coverage'].includes(p)||p.startsWith('test-results')),'Private/generated directory');
+ assert(path==='.env.example'||path==='.gitignore'||path==='.dockerignore'||!path.split('/').some(p=>p.startsWith('.')||['node_modules','__pycache__','coverage'].includes(p)||p.startsWith('test-results')),'Private/generated directory');
  assert(!/\.(?:log|dump|backup|sqlite\d?|db|pem|key|p12|pfx|pyc|tsbuildinfo)$/.test(path),'Private/generated file');
  const source=resolve(root,path);assert(source.startsWith(root+sep),'Source escapes project');
  let at=root;for(const part of path.split('/')){at=resolve(at,part);assert(!(await lstat(at)).isSymbolicLink(),'Source symlink/junction refused');}

@@ -11,6 +11,7 @@ import type {SharingOffer,ResourceBlock} from './equipment-sharing-offers';
 import {recordResourceNotice} from './center-resource-notices';
 import {loanDependencies} from './loan-dependencies';
 import {operatingCrewDemands} from './operating-capacity';
+import {taskCrewStaff} from './planned-labor-demand';
 import {readLaborCapacity} from './labor-capacity-store';
 const key=(id:string)=>({workspace:'shared',kind:'equipmentLoan',id});
 const json=(v:unknown)=>JSON.parse(JSON.stringify(v));
@@ -47,7 +48,7 @@ export async function resourceView(tx:Prisma.TransactionClient,state:State,id:st
   const last=Math.min(Date.parse(o.to),Date.parse(o.from)+366*86400000);
   for(let at=Date.parse(o.from);at<=last;at+=86400000){const date=new Date(at).toISOString().slice(0,10),key=o.ownerCenterId+':'+date;if(lendingDays.has(key))continue;
    const crew=Array(32).fill(0),vehicles=Array(32).fill(0),operators=Array(32).fill(0);
-   for(const m of owner.missions.filter(m=>m.scheduledDate===date&&m.status!=='CANCELLED'))for(let t=(m.start%32+32)%32;t<Math.min(32,(m.start%32+32)%32+m.duration);t++){crew[t]+=m.owner==='농부'?0:Math.max(1,m.staff);vehicles[t]+=m.transport;}
+   for(const m of owner.missions.filter(m=>m.scheduledDate===date&&m.status!=='CANCELLED'))for(let t=(m.start%32+32)%32;t<Math.min(32,(m.start%32+32)%32+m.duration);t++){crew[t]+=taskCrewStaff(m);vehicles[t]+=m.transport;}
    const committed=new Set(loans.filter(l=>l.ownerCenterId===o.ownerCenterId&&l.status==='CONFIRMED'&&l.usableFrom<=date&&date<=l.usableUntil).map(l=>l.machineId)).size;
    for(const m of owner.missions.filter(m=>m.scheduledDate===date&&m.status!=='CANCELLED')){
     const demand=operatingCrewDemands(owner,m)?.[`${owner.centerSharing?.centerId??'demo'}:operators`]??0;
@@ -72,10 +73,12 @@ export async function assertResourceBooking(tx:Prisma.TransactionClient,centerId
 }
 export async function saveLoan(tx:Prisma.TransactionClient,input:unknown,actor:Principal,reason?:string){
  const b=loanInput.parse(input);
- if(actor.role!=='CENTER_ADMIN'||!knownCenter(actor.centerId))throw Error('센터 관리자 권한 필요');
+ const staffRequest=actor.role==='CENTER_STAFF'&&b.version===0&&b.status==='REQUESTED'&&b.borrowerCenterId===actor.centerId;
+ if(!knownCenter(actor.centerId)||(actor.role!=='CENTER_ADMIN'&&!staffRequest))throw Error('센터 관리자 권한 필요');
  await lockCenterPool(tx);
  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`kfarm-resource:${b.machineId}`},0))`;
  const previous=await tx.workRecord.findUnique({where:{workspace_kind_id:key(b.id)}}),old=previous?.payload as unknown as EquipmentLoan|undefined;
+ if(staffRequest&&previous)throw Error('센터 담당자는 신규 차용 요청만 등록할 수 있습니다.');
  if((previous?.version??0)!==b.version)throw Error('대여 내용이 변경되었습니다. 다시 확인하세요.');
  if(old&&['machineId','ownerCenterId','borrowerCenterId'].some(k=>(old as any)[k]!== (b as any)[k]))throw Error('대여의 장비·센터 식별자는 변경할 수 없습니다.');
  if(old?.status==='CANCELLED'||old?.status==='RETURNED')throw Error('종료한 대여는 새 요청으로 접수하세요.');
@@ -132,7 +135,7 @@ export async function markSharedFailure(tx:Prisma.TransactionClient,machineId:st
   await tx.center.update({where:{id:row.id},data:{state:json(state),version:{increment:1}}});
   if(affected.length){const id=crypto.randomUUID();impacts.push({centerId:row.id,taskIds:affected.map(m=>m.id)});
    await tx.workRecord.create({data:{workspace:recordSpace(row.id),kind:'resourceImpact',id,payload:{machineId,ownerId,from,expectedRepairOn:expectedRepairOn??null,actor,taskIds:affected.map(m=>m.id),status:'REPLAN_REQUIRED'}}});
-   for(const farmerId of new Set(affected.flatMap(m=>state.fields.filter(f=>f.id===m.fieldId).map(f=>f.farmerId))))await tx.outbox.create({data:{id:`resource-impact:${id}:${farmerId}`,centerId:row.id,farmerId,planVersion:state.planVersion,body:'장비 고장으로 작업을 보류하고 대체 장비와 일정을 확인 중입니다. 확정 후 다시 안내합니다.'}});
+   for(const farmerId of new Set(affected.flatMap(m=>state.fields.filter(f=>f.id===m.fieldId).map(f=>f.farmerId))))await tx.outbox.create({data:{status:'RECORDED_ONLY',id:`resource-impact:${id}:${farmerId}`,centerId:row.id,farmerId,planVersion:state.planVersion,body:'장비 고장으로 작업을 보류하고 대체 장비와 일정을 확인 중입니다. 확정 후 다시 안내합니다.'}});
   }
  }
  const loans=await tx.workRecord.findMany({where:{workspace:'shared',kind:'equipmentLoan'}});

@@ -26,7 +26,8 @@ export function withNamedOperators(state:State,job:SchedulingJob,mission:Pick<Mi
  const options=job.options??[{resource:job.resource,allowed:job.allowed,borrowed:false,duration:job.duration}];
  const next=options.map((o):ResourceOption=>{
   const code=o.resource?equipmentCode(o.resource).match(/([A-Z]{2})\d+$/)?.[1]:undefined,duration=o.duration??job.duration;
-  const operatorCandidates=state.operatorRoster!.filter(p=>p.active&&p.kinds.some(k=>k===code)).map(p=>({id:p.id,allowed:o.allowed.filter(s=>{
+  const assigned=o.resource===mission.resourceId&&mission.operatorIds?.length===1?mission.operatorIds[0]:state.machines.find(m=>m.id===o.resource)?.defaultOperatorId;
+  const operatorCandidates=state.operatorRoster!.filter(p=>p.active&&p.kinds.some(k=>k===code)&&(!assigned||count!==1||p.id===assigned)).map(p=>({id:p.id,allowed:o.allowed.filter(s=>{
    const date=slotDate(s),minute=480+((s%32+32)%32)*15;
    return p.from<=date&&date<=p.until&&!p.excludedDates.includes(date)&&p.weekdays.includes(new Date(date+'T00:00:00Z').getUTCDay())&&p.startMinute<=minute&&minute+duration*15<=p.endMinute;
   })})).filter(p=>p.allowed.length);

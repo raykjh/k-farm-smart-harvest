@@ -72,7 +72,7 @@ export function appendAssignments(state: State, plan: AnnualPlan, dispatch: Disp
       ...(a.operatorIds ? {operatorIds: a.operatorIds} : {}),
       ...(a.laborSupportIds ? {laborSupportIds: a.laborSupportIds} : {}),
       id: a.taskId, fieldId: a.pnu, crop: cropNames[plot.crop as SupportedCropCode], label: task.name,
-      scheduledDate: a.date, month: Number(a.date.slice(5, 7)), owner: a.owner, status: 'PLANNED', resourceId: a.machineId,
+      scheduledDate: a.date, month: Number(a.date.slice(5, 7)), owner: a.machineId ? '장비' : '센터 인력', status: 'PLANNED', resourceId: a.machineId,
       start: Math.round((Date.parse(a.date) - Date.parse('2026-09-09')) / 86400000) * 32 + (a.startMinute - 480) / 15,
       duration: a.durationMinutes / 15,
       deadline: Math.round((Date.parse(task.window.to) - Date.parse('2026-09-09')) / 86400000) * 32 + 32,
@@ -82,7 +82,7 @@ export function appendAssignments(state: State, plan: AnnualPlan, dispatch: Disp
         ...('compatibilityCrop' in task && task.compatibilityCrop ? {compatibilityCrop: plot.crop as SupportedCropCode} : {}),
         executionReviewRequired: !!plot.environmental || ('executionReviewRequired' in task && !!task.executionReviewRequired),
         environmentReference: plot.environmental ?? null,
-        cultivationId: task.cultivationId, operationKey: a.operationKey, operationCode: task.operationCode,
+        cultivationId: task.cultivationId, operationKey: a.operationKey, operationCode: task.operationCode, kind: task.kind,
         occurrence: task.occurrence, predecessorMissionIds: a.predecessorMissionIds,
         planningWindow: {
           ...task.window, allowedWindows: task.allowedWindows ?? null,

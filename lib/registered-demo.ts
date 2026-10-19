@@ -5,6 +5,7 @@ import {consultationSchema} from './consultation';
 import {fieldInventory} from './field-record';
 import type {State,Machine,Mission,Crop} from './types';
 import {linkLegacyOperations} from './operation-links';
+import {demoEquipmentCrops} from './demo-equipment-crops';
 export const DEMO_BATCH='gyebuk-2026-30-v1';
 export const demoEquipment=[['TR','트랙터·경운 로터리',0.4],['DR','방제 드론',2],['RP','승용 이앙기',0.3],['PS','감자 파종기',0.2],['CB','벼 콤바인',0.3],['PD','감자 굴취기',0.2],['SP','지상 방제기',0.3],['TV','장비 운송차량',0]] as const;
 export const demoMachineIds=demoEquipment.flatMap(([code])=>[1,2].map(n=>`JB23${code}0${n}`));
@@ -21,7 +22,7 @@ const uuid=(i:number)=>`20260000-0000-4000-8000-${String(i+1).padStart(12,'0')}`
 export const demoParcelsSchema=z.array(z.object({pnu:z.string().regex(/^\d{19}$/),address:z.string().min(1).max(200),area:z.number().positive().max(10000000),land:z.string().min(1),source:z.enum(['VWorld LP_PA_CBND_BUBUN','SYNTHETIC_TEST_INPUT'])})).length(30).refine(rows=>new Set(rows.map(p=>p.pnu)).size===30,'Duplicate parcel');
 export type DemoParcel=z.infer<typeof demoParcelsSchema>[number];
 export function demoResourceState():State{
- const machines:Machine[]=demoEquipment.flatMap(([code,name,capacity])=>[1,2].map(n=>({id:`JB23${code}0${n}`,name:`${name} ${n}호`,type:name,status:'AVAILABLE',safetyLock:false,capacityHaHour:capacity})));
+ const machines:Machine[]=demoEquipment.flatMap(([code,name,capacity])=>[1,2].map(n=>({id:`JB23${code}0${n}`,name:`${name} ${n}호`,type:name,status:'AVAILABLE',safetyLock:false,capacityHaHour:capacity,compatibleCrops:[...demoEquipmentCrops[code]]})));
  return {name:'계북면 농업지원센터',planVersion:1,fields:[],machines,missions:[],events:[],revisions:[],registered:true,planned:true,ruleVersion:DEMO_BATCH,staffCount:2,transportCount:2};
 }
 export function registeredDemo(input?:DemoParcel[]){

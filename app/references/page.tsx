@@ -1,2 +1,2 @@
-import CropReferencePanel from '@/components/crop-reference-panel';
-export default function Page(){return <CropReferencePanel/>}
+import {redirect} from 'next/navigation';
+export default function Page(){redirect('/crop-info?tab=references');}

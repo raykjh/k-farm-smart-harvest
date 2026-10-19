@@ -6,6 +6,7 @@ import {NextRequest,NextResponse} from 'next/server';
 import {db} from '@/lib/db';
 import {parseWorkspace} from '@/lib/workspace';
 import {fieldInventory,type FieldEntry} from '@/lib/field-record';
+import {assertNoNewJointEnrollment} from '@/lib/field-enrollment-policy';
 import {z} from 'zod';
 export const runtime='nodejs';
 export const dynamic='force-dynamic';
@@ -17,8 +18,6 @@ async function handleGET(req:NextRequest){
  }catch{return NextResponse.json({error:'농지 자료를 읽을 수 없습니다.'},{status:503})}
 }
 async function handlePOST(req:NextRequest){
- const origin=req.headers.get('origin');
- if(!['127.0.0.1:3100','localhost:3100'].includes(req.headers.get('host')??'')||(origin&&!['http://127.0.0.1:3100','http://localhost:3100'].includes(origin)))return NextResponse.json({error:'허용되지 않은 출처'},{status:403});
  try{
  const raw=await req.text();if(raw.length>500000)return NextResponse.json({error:'입력이 너무 큽니다.'},{status:413});
  const b=z.object({workspace:z.enum(['operations','sandbox']).transform(()=>recordSpace()),version:z.number().int().nonnegative(),payload:fieldInventory,mode:z.enum(['replace','append']).default('replace')}).strict().parse(JSON.parse(raw));
@@ -27,6 +26,7 @@ async function handlePOST(req:NextRequest){
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`fields:${b.workspace}`}))`;
   const old=await tx.$queryRaw<Row[]>`SELECT "version","payload" FROM "WorkRecord" WHERE "workspace"=${b.workspace} AND "kind"='fields' AND "id"='current' FOR UPDATE`;
   if((old[0]?.version??0)!==b.version)return null;
+  assertNoNewJointEnrollment(b.payload,old[0]?.payload??[]);
   for(const p of b.payload){if(!p.consultationId)continue;const links=await tx.$queryRaw<{payload:Consultation}[]>`SELECT "payload" FROM "WorkRecord" WHERE "workspace"=${b.workspace} AND "kind"='consultation' AND "id"=${p.consultationId}`;if(!links[0]?.payload.fields.some(f=>f.pnu===p.pnu))throw Error('상담 연결 불일치');assertOwnerApplication(links[0].payload,p.pnu);}
   const payload=fieldInventory.parse(b.mode==='append'?[...(old[0]?.payload??[]),...b.payload]:b.payload);
   const version=b.version+1;

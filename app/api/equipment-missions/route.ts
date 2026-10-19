@@ -11,14 +11,20 @@ import {validateWorkGeometry} from '@/lib/work-area-geometry';
 import {legacyWorkGroups,legacyPartsInput,linkLegacyWorkParts} from '@/lib/legacy-work-parts';
 import {immovable} from '@/lib/replan-scope';
 import type {WorkMission} from '@/lib/replan-work-split';
+import {withRegisteredInventory} from '@/lib/inventory-view';
+import type {FieldEntry} from '@/lib/field-record';
 import {reservationSchema} from '@/lib/shared-reservations';
 import type {State} from '@/lib/types';
 import type {Prisma} from '@prisma/client';
 const today=()=>new Date(Date.now()+9*3600000).toISOString().slice(0,10),key=(kind:string,id:string)=>({workspace:recordSpace(),kind,id}),json=(v:unknown)=>JSON.parse(JSON.stringify(v));
 async function source(tx:Prisma.TransactionClient){
  const c=await tx.center.findUnique({where:{id:centerId()}}),s=c?await resourceView(tx,c.state as unknown as State,centerId()):null;
+ const inventory=await tx.workRecord.findUnique({where:{workspace_kind_id:{workspace:recordSpace(),kind:'fields',id:'current'}}});
+ const state=s?withRegisteredInventory(s,(inventory?.payload??[]) as FieldEntry[]):null;
  const rows=await tx.workRecord.findMany({where:{workspace:recordSpace(),kind:{in:['equipmentMission','workArea','splitWorkArea']}}}),r=await tx.workRecord.findMany({where:{workspace:'shared',kind:'resourceReservation'}});
- return {state:s,rows,reservations:r.map(x=>reservationSchema.parse(x.payload))};
+ // Registration owns the access status; the geometry record remains separate.
+ for(const row of rows.filter(r=>r.kind==='workArea')){const access=state?.fields.find(f=>f.id===row.id)?.machineAccess;if(access!==undefined)row.payload={...(row.payload as any),machineAccessConfirmed:access==='yes'};}
+ return {state,rows,reservations:r.map(x=>reservationSchema.parse(x.payload))};
 }
 export const GET=withAuth('equipment-missions',async()=>{
  const s=await source(db),areas=s.rows.filter(r=>r.kind==='workArea').map(r=>r.payload as unknown as WorkArea),packets=s.rows.filter(r=>r.kind==='equipmentMission');
@@ -29,7 +35,7 @@ export const GET=withAuth('equipment-missions',async()=>{
    return {groupId,sourceId:g.sourceId,fieldId:g.fieldId,label:g.members[0].label.replace(/ \(분할 \d+\/\d+\)$/,''),editable:g.editable,parent,saved,...review,members:g.members.map(m=>({id:m.id,part:m.equipmentSplit!.part,label:m.label,date:m.scheduledDate,status:m.status,frozen:immovable(m),areaHa:m.equipmentWork!.areaHa}))};
   }catch(e){return {groupId,editable:false,ready:false,reason:e instanceof Error?e.message:'분할 구역 검토 필요',members:[]};}
  });
- return NextResponse.json({canManage:currentPrincipal()?.role==='CENTER_ADMIN',areas,groups,legacyGroups:s.state?legacyWorkGroups(s.state):[],fields:s.state?.fields.map(f=>({id:f.id,address:f.address}))??[],tasks:s.state?.missions.filter(m=>m.resourceId&&!m.resourceOccupancyOnly&&!['CANCELLED','COMPLETED'].includes(m.status)).map(m=>{
+ return NextResponse.json({canManage:currentPrincipal()?.role==='CENTER_ADMIN',areas,groups,legacyGroups:s.state?legacyWorkGroups(s.state):[],fields:s.state?.fields.map(f=>({id:f.id,address:f.address,machineAccess:f.machineAccess}))??[],tasks:s.state?.missions.filter(m=>m.resourceId&&!m.resourceOccupancyOnly&&!['CANCELLED','COMPLETED'].includes(m.status)).map(m=>{
   const check=missionPacket(s.state!,centerId(),m.id,areas.find(a=>a.pnu===m.fieldId)??null,s.reservations,today(),splitAreas),stored=packets.find(r=>(r.payload as any).missionId===m.id)?.payload as any;
   return {id:m.id,label:m.label,fieldId:m.fieldId,date:m.scheduledDate,equipmentId:m.resourceId,...check,status:stored?(stored.fingerprint!==check.fingerprint||!check.ready?'STALE':stored.status):'NOT_PREPARED'};
  })??[]});

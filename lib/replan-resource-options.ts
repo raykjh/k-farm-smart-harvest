@@ -1,6 +1,9 @@
 import type {Machine,Mission,State} from './types';
 import type {SharingOffer} from './equipment-sharing-offers';
 import {machineAvailableToCenter} from './center-sharing';
+import {equipmentDownOn} from './equipment-downtime';
+import {sameEquipmentKind} from './equipment-code';
+import {cropCodes,cropNames} from './crop-registry';
 export type ReplanResource={machine:Machine|null;offer?:SharingOffer;borrowed:boolean};
 export function equipmentWork(s:State,m:Mission):import('./types').EquipmentWork|null{
  const existing=(m as Mission&{equipmentWork?:import('./types').EquipmentWork}).equipmentWork;
@@ -20,7 +23,7 @@ export function resourceDuration(s:State,m:Mission,r:ReplanResource){
  const conservative=work.basis==='APPROVED_DURATION_X_CAPACITY'?Math.max(time,work.areaHa/work.referenceCapacityHaHour*4):time;
  return Math.max(1,Math.ceil(conservative-1e-9));
 }
-export function supportsMissionCrop(machine:Machine|undefined|null,mission:Mission){return !mission.compatibilityCrop||!!machine?.compatibleCrops?.includes(mission.compatibilityCrop);}
+export function supportsMissionCrop(machine:Machine|undefined|null,mission:Mission){return !mission.resourceId||!mission.compatibilityCrop||!!machine?.compatibleCrops?.includes(mission.compatibilityCrop);}
 export function requiredLoanPool(s:State,r:ReplanResource,date:string){
  if(!r.borrowed||!r.offer||!r.machine)return;
  if(s.centerSharing?.loans.some(l=>l.machineId===r.machine!.id&&l.borrowerCenterId===s.centerSharing!.centerId&&l.status==='CONFIRMED'&&l.usableFrom<=date&&date<=l.usableUntil))return;
@@ -31,10 +34,29 @@ export function resourceCandidates(s:State,m:Mission,automatic=true):ReplanResou
  const original=s.machines.find(x=>x.id===m.resourceId),sharing=s.centerSharing;
  const result:ReplanResource[]=[{machine:original??null,borrowed:!!original?.ownerCenterId&&!!sharing&&original.ownerCenterId!==sharing.centerId}];
  if(!automatic||!m.resourceId||!original||original.safetyLock)return result;
+ // Same-center equipment needs no inter-center loan, but must explicitly
+ // support the crop; a label alone is not evidence of implement compatibility.
+ const localCenter=sharing?.centerId??original.ownerCenterId??'demo';
+ // The original three-crop intake path stores the selected crop name without
+ // the newer catalog marker. Resolve that stable identity, never equipment
+ // compatibility: the substitute must still explicitly list this crop.
+ const crop=m.compatibilityCrop??cropCodes.find(code=>cropNames[code]===m.crop);
+ for(const candidate of s.machines){
+  if(candidate.id===original.id||(candidate.ownerCenterId??localCenter)!==localCenter||!sameEquipmentKind(original,candidate)||!(candidate.capacityHaHour>0)||!(original.capacityHaHour>0))continue;
+  if(!crop||!candidate.compatibleCrops?.includes(crop))continue;
+  result.push({machine:candidate,borrowed:false});
+ }
+ // A separately approved repair loan must work without a standing offer too.
+ for(const loan of sharing?.loans??[]){
+  if(loan.status!=='CONFIRMED'||loan.borrowerCenterId!==localCenter||!loan.operatorConfirmed||!loan.transportConfirmed||!sharing!.neighborCenterIds.includes(loan.ownerCenterId))continue;
+  const candidate=s.machines.find(x=>x.id===loan.machineId&&x.ownerCenterId===loan.ownerCenterId);
+  if(!candidate||!sameEquipmentKind(original,candidate)||!(candidate.capacityHaHour>0)||!(original.capacityHaHour>0)||!crop||!candidate.compatibleCrops?.includes(crop)||result.some(r=>r.machine?.id===candidate.id))continue;
+  result.push({machine:candidate,borrowed:true});
+ }
  for(const offer of sharing?.offers??[]){
   if(!offer.enabled||!offer.noExtraApprovalRequired||!offer.operatorConfirmed||!offer.transportConfirmed||offer.borrowerCenterId!==sharing!.centerId||!offer.compatibleMachineIds.includes(m.resourceId))continue;
   const candidate=s.machines.find(x=>x.id===offer.machineId);
-  if(!candidate||candidate.ownerCenterId!==offer.ownerCenterId||candidate.id===original.id||candidate.type!==original.type||!(original.capacityHaHour>0)||!Number.isFinite(candidate.capacityHaHour)||candidate.capacityHaHour<=0)continue;
+  if(!candidate||candidate.ownerCenterId!==offer.ownerCenterId||candidate.id===original.id||!sameEquipmentKind(candidate,original)||!(original.capacityHaHour>0)||!Number.isFinite(candidate.capacityHaHour)||candidate.capacityHaHour<=0)continue;
   const borrowed=offer.ownerCenterId!==sharing!.centerId;
   if(borrowed&&!sharing!.neighborCenterIds.includes(offer.ownerCenterId))continue;
   if(result.some(r=>r.machine?.id===candidate.id))continue;
@@ -42,7 +64,7 @@ export function resourceCandidates(s:State,m:Mission,automatic=true):ReplanResou
  }return result.sort((a,b)=>Number(a.borrowed)-Number(b.borrowed));
 }
 export function resourceUsable(s:State,r:ReplanResource,date:string,start:number,duration:number){
- const m=r.machine;if(!m)return true;
+ const m=r.machine;if(!m)return true;if(equipmentDownOn(m,date))return false;
  if(m.status!=='AVAILABLE'||m.safetyLock||m.availableFrom&&date<m.availableFrom||m.availableUntil&&date>m.availableUntil)return false;
  if(s.centerSharing?.blocks?.some(b=>b.machineId===m.id&&b.date===date))return false;
  if(r.offer){const o=r.offer;

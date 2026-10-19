@@ -49,3 +49,11 @@ body{word-break:keep-all;overflow-wrap:break-word}
 .split-area-part h4 { margin:0 0 8px; }
 .split-area-part textarea { display:block; width:100%; max-width:100%; box-sizing:border-box; font:13px monospace; }
 .split-area-review button { white-space:normal; }
+.manual-alternative-editor { margin:16px 0; padding:18px; border:1px solid #d4ddd3; background:#fff; min-width:0; }
+.manual-alternative-editor fieldset { border:0; padding:0; min-width:0; }
+.manual-alternative-editor .registration-grid { gap:12px; margin-bottom:14px; }
+.manual-alternative-editor .registration-input { margin-bottom:12px; }
+.manual-alternative-editor :is(input:not([type="checkbox"]),textarea) { width:100%; min-width:0; box-sizing:border-box; border:1px solid #c8d1c7; border-radius:4px; padding:10px; font:inherit; }
+.manual-alternative-editor .manual-standard-confirm { display:flex; align-items:flex-start; gap:8px; line-height:1.6; }
+.manual-standard-confirm input { margin-top:6px; flex-shrink:0; }
+.manual-alternative-editor p { overflow-wrap:anywhere; }

@@ -60,7 +60,7 @@ test('real intake, sequential approval, labor attendance, replanning and final n
   await form.getByRole('button',{name:'브이월드 지번 검색',exact:true}).click();await form.getByRole('button',{name:'필지 선택',exact:true}).click();await form.getByRole('button',{name:'필지 초안에 추가',exact:true}).click();
   await form.getByLabel(parcel.address+' 작업면적',{exact:true}).fill('1000');await form.getByLabel(parcel.address+' 토지형태',{exact:true}).selectOption('paddy');
   await form.getByRole('button',{name:'선택 농지 저장',exact:true}).click();await form.getByRole('button',{name:'다음',exact:true}).click();
-  await form.getByRole('radio',{name:/완전위탁형/}).check();await form.getByText('농지·기후 확인값',{exact:true}).click();await form.getByText('농지·지역 조건 확인 및 추천 근거',{exact:true}).click();
+  await form.getByText('농지·기후 확인값',{exact:true}).click();await form.getByText('농지·지역 조건 확인 및 추천 근거',{exact:true}).click();
   await form.getByLabel('용수 확보',{exact:true}).selectOption('yes');await form.getByLabel('작업 장비 진입',{exact:true}).selectOption('yes');await form.getByLabel('필수 인력 확보',{exact:true}).selectOption('yes');
   await form.getByLabel('검토 지역',{exact:true}).fill('계북면');await form.getByRole('combobox',{name:/쌀 · 지역·품종 적합성 검토/}).selectOption('suitable');
   await form.getByLabel('확인일',{exact:true}).fill(today);await form.getByLabel('출처·품종·현장 확인자 및 근거',{exact:true}).fill('격리 통합검증 입력 · 실제 소유 및 영농 적합성을 확인한 자료가 아님');

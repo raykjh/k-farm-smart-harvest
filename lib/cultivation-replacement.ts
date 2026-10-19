@@ -19,7 +19,7 @@ import {preserveCompletedWorkAreas} from './completed-work-area';
 const json=(v:unknown)=>JSON.parse(JSON.stringify(v));
 const hash=(v:unknown)=>createHash('sha256').update(JSON.stringify(v)).digest('hex');
 const key=(kind:string,id:string)=>({workspace:recordSpace(),kind,id});
-export type ReplacementInput={id:string;crop:import('./crop-registry').SupportedCropCode;area:number;action:string;token?:string;context?:GuidelineContext;review?:{cost:string;consent:string}};
+export type ReplacementInput={id:string;crop:import('./crop-registry').SupportedCropCode;area:number;action:string;token?:string;context?:GuidelineContext;candidateId?:string;period?:{start:string;end:string};review?:{cost:string;consent:string}};
 /** Caller holds center, inventory and cultivation locks. All writes commit together. */
 export async function replaceCultivation(tx:Prisma.TransactionClient,b:ReplacementInput,actor:string,c:Cultivation,old:AnnualPlan,fields:FieldEntry[],version:number,state:State){
  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`labor-operations:${recordSpace()}`}))`;
@@ -33,10 +33,10 @@ export async function replaceCultivation(tx:Prisma.TransactionClient,b:Replaceme
  if(removed.some(m=>!['PLANNED','HELD','UNSTAFFED'].includes(m.status)||state.machines.some(r=>r.id===m.resourceId&&(r.safetyLock||r.status==='WORKING'))))blockers.push('가동 중 장비 또는 안전 잠금 상태를 먼저 확인하세요.');
  if(state.missions.some(m=>!linked.includes(m)&&(m as any).predecessorMissionIds?.some((id:string)=>removed.some(r=>r.id===id))))blockers.push('다른 재배의 후속 작업이 연결되어 있습니다. 함께 변경 검토해야 합니다.');
  if(old.plots.some(p=>p.environmental))blockers.push('환경 기준 연결 계획은 최신 예보·생육 검토를 다시 저장한 뒤 변경해야 합니다.');
- const cropChanged=c.crop!==b.crop;
- const next={...c,crop:b.crop},updated={...inventory,crop:b.crop,area:b.area};
+ const cropChanged=c.crop!==b.crop||!!b.period&&(c.start!==b.period.start||c.end!==b.period.end);
+ const next={...c,crop:b.crop,...b.period},updated={...inventory,crop:b.crop,area:b.area};
  const context=b.context??(cropChanged?{region:old.context.region}:old.context);
- const plan=buildAnnualPlan([updated],Number(c.start.slice(0,4)),version+1,context,next,undefined,state);
+ const plan=buildAnnualPlan([updated],Number(next.start.slice(0,4)),version+1,context,next,undefined,state);
  if(!cropChanged){const mapping=new Map<string,string>();for(const t of plan.plots[0].tasks){const previous=old.plots[0].tasks.find(p=>p.operationCode===t.operationCode&&p.occurrence===t.occurrence&&('part' in p?p.part:1)===('part' in t?t.part:1));if(previous){mapping.set(t.operationKey,previous.operationKey);t.id=previous.id;}}for(const t of plan.plots[0].tasks){t.operationKey=mapping.get(t.operationKey)??t.operationKey;t.predecessorKeys=t.predecessorKeys.map(k=>mapping.get(k)??k);}}
  if(!cropChanged)blockers.push(...preserveCompletedWorkAreas(plan,old,preserved));
  // Crop replacement must never count the former crop's completed operations as new work.
@@ -54,7 +54,7 @@ export async function replaceCultivation(tx:Prisma.TransactionClient,b:Replaceme
  try{validateReservations(dispatch.assignments.filter(a=>a.machineId).map(a=>reservationSchema.parse({id:'preview:'+a.taskId,centerId:activeCenterId(),taskId:a.taskId,resourceId:a.machineId,from:new Date(Date.parse(a.date+'T08:00:00+09:00')+(a.startMinute-480)*60000).toISOString(),to:new Date(Date.parse(a.date+'T08:00:00+09:00')+(a.startMinute-480+a.durationMinutes)*60000).toISOString()})),rows.filter(r=>r.kind==='resourceReservation'&&!reservations.includes(r)).map(r=>reservationSchema.parse(r.payload)));}catch{blockers.push('센터 간 공통 예약과 충돌합니다. 자원·작업기간을 조정하세요.');}
  if(jobs.some(j=>j.status==='COMPLETED'))blockers.push('근무 실적이 연결된 작업입니다. 작업 완료 기록을 먼저 정합화하세요.');
  const impact={preserved:preserved.map(m=>({id:m.id,name:m.label,date:m.scheduledDate})),removed:removed.map(m=>({id:m.id,name:m.label,date:m.scheduledDate,resourceId:m.resourceId})),reservations:reservations.map(r=>r.payload),labor:jobs.map(j=>({id:j.id,missionId:j.missionId,date:j.date,assigned:j.assigned,invited:j.invited})),cost:{status:'REVIEW_REQUIRED',amount:null,note:'기발생 실비·취소 비용·추가 작업비를 담당자가 확인합니다. 미확인 단가로 금액을 만들지 않습니다.'},consent:{status:'REVIEW_REQUIRED',note:'작물·면적 변경에 대한 농부 동의 또는 유효한 위임 근거를 확인합니다.'}};
- const token=hash({engine:SCHEDULING_ENGINE_VERSION,placement:dispatchPlacementKey(dispatch.assignments),b:{id:b.id,crop:b.crop,area:b.area,context},c,old,fields,version,state,rows,today});
+ const token=hash({engine:SCHEDULING_ENGINE_VERSION,placement:dispatchPlacementKey(dispatch.assignments),b:{id:b.id,crop:b.crop,area:b.area,context,period:b.period,candidateId:b.candidateId},c,old,fields,version,state,rows,today});
  if(b.action!=='approve')return {token,saved:false,requiresApproval:true,approvedPlan:true,blockers,impact,tasks:plan.taskCount,dispatch};
  if(b.token!==token)throw Error('변경안 이후 계획·예약·인력이 변경되었습니다. 다시 계산하세요.');
  if(blockers.length)throw Error(blockers.join(' '));
@@ -79,11 +79,11 @@ export async function replaceCultivation(tx:Prisma.TransactionClient,b:Replaceme
  await tx.workRecord.upsert({where:{workspace_kind_id:key('laborOperations','current')},create:{...key('laborOperations','current'),payload:json(ops)},update:{payload:json(ops),version:{increment:1}}});
  await tx.workRecord.update({where:{workspace_kind_id:key('fields','current')},data:{version:{increment:1},payload:json(fields.map(f=>f.pnu===c.pnu?updated:f))}});
  await tx.workRecord.update({where:{workspace_kind_id:key('cultivation',c.id)},data:{version:{increment:1},payload:json(next)}});
- await tx.workRecord.update({where:{workspace_kind_id:key('cultivationPlan',c.id)},data:{version:{increment:1},payload:json(plan)}});
+ await tx.workRecord.upsert({where:{workspace_kind_id:key('cultivationPlan',c.id)},create:{...key('cultivationPlan',c.id),payload:json(plan)},update:{version:{increment:1},payload:json(plan)}});
  after.planVersion++;await tx.center.update({where:{id:activeCenterId()},data:{version:{increment:1},state:json(after)}});
  const farmer=after.fields.find(f=>f.id===c.pnu)?.farmerId;
- if(farmer)await tx.outbox.create({data:{id:'cultivation-change:'+token,centerId:activeCenterId(),farmerId:farmer,planVersion:after.planVersion,body:`[모의 알림] ${inventory.address} 재배계획 변경: ${after.fields.find(f=>f.id===c.pnu)?.crop}, ${b.area}㎡. 이전 안내보다 최신 계획을 확인해주세요.`}});
- const result={token,request:{id:b.id,crop:b.crop,area:b.area,context:b.context??null,review:b.review,actor},saved:true,approvedPlan:true,impact,dispatch,blockers:[],tasks:plan.taskCount,notifications:farmer?1:0,planVersion:after.planVersion};
+ if(farmer)await tx.outbox.create({data:{status:'RECORDED_ONLY',id:'cultivation-change:'+token,centerId:activeCenterId(),farmerId:farmer,planVersion:after.planVersion,body:`[모의 알림] ${inventory.address} 재배계획 변경: ${after.fields.find(f=>f.id===c.pnu)?.crop}, ${b.area}㎡. 이전 안내보다 최신 계획을 확인해주세요.`}});
+ const result={token,request:{id:b.id,crop:b.crop,area:b.area,context:b.candidateId?null:b.context??null,...(b.candidateId?{candidateId:b.candidateId}:{}),review:b.review,actor},saved:true,approvedPlan:true,impact,dispatch,blockers:[],tasks:plan.taskCount,notifications:farmer?1:0,planVersion:after.planVersion};
  await tx.workRecord.create({data:{...key('cultivationChangeApproval',token),payload:json(result)}});
  return result;
 }

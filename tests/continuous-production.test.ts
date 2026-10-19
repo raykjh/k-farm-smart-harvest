@@ -3,7 +3,7 @@ import {planContinuousProduction,cropPeriod,serviceTerm,type Participation,type 
 import {registeredDemo} from './registered-demo-fixture';
 import {emptyConditions} from '../lib/field-conditions';
 import {appendAssignments} from '../lib/delegated-planning';
-import {permitted} from '../lib/auth-policy';
+import {permitted,canConfirmProduction} from '../lib/auth-policy';
 import type {FieldEntry} from '../lib/field-record';
 
 // Deliberately synthetic windows: exercise engine contracts, not agronomic advice.
@@ -72,8 +72,15 @@ describe('incremental continuous production',()=>{
   expect(()=>serviceTerm.parse({from:'2026-09-28',until:null,continuousConsent:false})).toThrow();
   const p=cropPeriod('rice',criteria().profiles[0].context,'2027-01-05',null);expect(p.start).toBe('2027-01-05');expect(p.end).toBe('2027-02-28');expect(p.context.operations!.rice!.plant.to).toBe('2027-02-28');
  });
- it('allows staff drafts but reserves approvals and consent editing for the center administrator',()=>{
+ it('lets staff confirm only validated AI drafts without extending consent or other-center permissions',()=>{
   const p={id:'test',username:'test',name:'test',role:'CENTER_STAFF' as const,centerId:'demo',enabled:true};
-  expect(permitted(p,'continuous-production','POST',{action:'refresh'})).toBe(true);expect(permitted(p,'continuous-production','POST',{action:'approve'})).toBe(false);expect(permitted({...p,role:'CENTER_ADMIN'},'continuous-production','POST',{action:'approve'})).toBe(true);expect(permitted({...p,centerId:'other'},'continuous-production','GET',null)).toBe(false);
+  expect(permitted(p,'continuous-production','POST',{action:'refresh'})).toBe(true);expect(permitted(p,'continuous-production','POST',{action:'approve'})).toBe(true);expect(permitted({...p,role:'CENTER_ADMIN'},'continuous-production','POST',{action:'approve'})).toBe(true);expect(permitted({...p,centerId:'other'},'continuous-production','GET',null)).toBe(false);
+  for(const action of ['criteria','participation','ai-review','rule-review'])expect(permitted(p,'continuous-production','POST',{action})).toBe(false);
+  const ai={inferenceCalled:true,integratedPlan:{source:'NEBIUS'}};
+  expect(canConfirmProduction(p,ai)).toBe(true);
+  for(const view of [null,{}, {...ai,inferenceCalled:false},{...ai,integratedPlan:{source:'RULES'}},{...ai,aiReviewError:{message:'failed'}}])expect(canConfirmProduction(p,view)).toBe(false);
+  expect(canConfirmProduction({...p,centerId:'other'},ai)).toBe(false);
+  expect(canConfirmProduction({...p,role:'SUPER_ADMIN'},ai)).toBe(false);
+  expect(canConfirmProduction({...p,enabled:false},ai)).toBe(false);
  });
 });

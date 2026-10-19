@@ -12,6 +12,10 @@ export async function refreshAllCenters(){
   try{
    if(!await db.center.findUnique({where:{id:center.id}})){outcomes.push({centerId:center.id,status:'ABSENT'});continue;}
    await inCenter(center.id,()=>db.$transaction(tx=>refreshProduction(tx),{timeout:60000}));
+   if(process.env.KFARM_PRODUCTION_AI==='1'){
+    const {reviewProductionAutomatically}=await import('./production-auto-review');
+    await inCenter(center.id,()=>reviewProductionAutomatically());
+   }
    outcomes.push({centerId:center.id,status:'REFRESHED'});
   }catch{
    outcomes.push({centerId:center.id,status:'FAILED'});

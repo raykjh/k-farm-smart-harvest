@@ -44,8 +44,10 @@ export async function syncChangedPlanReservations(tx:Prisma.TransactionClient,ce
   const key={workspace:recordSpace(centerId),kind:'laborDemand',id:m.id};
   const existing=await tx.workRecord.findUnique({where:{workspace_kind_id:key}});
   const source=existing??(m.equipmentSplit?await tx.workRecord.findUnique({where:{workspace_kind_id:{...key,id:m.equipmentSplit.sourceId}}}):null);
-  if(!source||isClosedTask(m.status))continue;
-  const payload=JSON.parse(JSON.stringify({...source.payload as object,missionId:m.id,date:m.scheduledDate,startMinute:480+((m.start%32+32)%32)*15,durationMinutes:m.duration*15,people:ordinaryWorkerDemand(m),totalCenterStaff:m.staff,owner:m.owner,status:'UNASSIGNED',...(m.equipmentSplit?{splitFromMissionId:m.equipmentSplit.sourceId}:{}),note:'변경계획의 인력 수요. 실제 참석은 다시 확인합니다.'}));
+  // Older manual tasks may predate executionMethod/laborDemand. Their ordinary
+  // labor reservation must still be materialized when the task is rescheduled.
+  if(isClosedTask(m.status)||!source&&(!!m.resourceId||ordinaryWorkerDemand(m)<=0))continue;
+  const payload=JSON.parse(JSON.stringify({...source?.payload as object,...(!source?{source:'REPLAN_MANUAL_DEMAND'}:{}),missionId:m.id,date:m.scheduledDate,startMinute:480+((m.start%32+32)%32)*15,durationMinutes:m.duration*15,people:ordinaryWorkerDemand(m),totalCenterStaff:m.staff,owner:m.owner,status:'UNASSIGNED',...(m.equipmentSplit?{splitFromMissionId:m.equipmentSplit.sourceId}:{}),note:'변경계획의 인력 수요. 실제 참석은 다시 확인합니다.'}));
   await tx.workRecord.upsert({where:{workspace_kind_id:key},create:{...key,payload},update:{payload,version:{increment:1}}});
  }
  await tx.audit.create({data:{centerId,action:'plan.reservations.sync',detail:{actor,before:linked.map(x=>x.r),after:next,taskIds:changedIds}}});

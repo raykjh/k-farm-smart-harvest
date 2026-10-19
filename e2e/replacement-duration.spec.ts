@@ -1,5 +1,6 @@
 import {test,expect} from './authenticated-test';
 import {randomUUID} from 'node:crypto';
+import {openWorkOrder} from './work-order-navigation';
 import {mkdirSync,writeFileSync} from 'node:fs';
 import {db} from '../lib/db';
 import {laborCapacityFixture} from '../tests/labor-capacity-fixture';
@@ -37,7 +38,7 @@ test('reviews multi-day replacement duration, approves both reservations and rec
   const labor=(await (await page.request.get('/api/labor-operations')).json()),renewed=labor.payload.jobs.filter((j:any)=>j.status==='OPEN');expect(renewed).toHaveLength(2);expect(labor.demands).toHaveLength(2);
   for(const j of renewed){expect(j.responses).toEqual({});await page.getByRole('button',{name:`${j.date} · ${j.task} · OPEN`,exact:true}).click();const assignment=page.getByRole('dialog');await assignment.getByRole('combobox',{name:'홍가상 참석',exact:true}).selectOption('PHONE');await expect(assignment).toContainText('부족: 0');await assignment.getByRole('button',{name:'닫기',exact:true}).click();}
   await page.getByText('안내·배정 변경·패널티 이력',{exact:true}).click();await expect(page.locator('.labor-panel')).toContainText('일정 변경 · 참석 재확인');await page.screenshot({path:evidence+'/split-attendance-ko.png',fullPage:true});
-  await page.goto('/?tab=equipment');const packets=page.getByTestId('equipment-missions');await packets.locator('summary').first().click();const partSummary=packets.locator('summary').filter({hasText:'분할 1/2'});await partSummary.click();const partPacket=partSummary.locator('..');await expect(partPacket.getByText(/분할별 현장 작업구역 연결 필요/)).toBeVisible();await expect(partPacket.getByRole('button',{name:'전달자료 생성',exact:true})).toBeDisabled();
+  const part=saved.missions.find(m=>m.label.includes('분할 1/2'))!;const packets=await openWorkOrder(page,part);const partPacket=packets.getByTestId('work-order-packet-'+part.id);await expect(partPacket.getByText(/분할별 현장 작업구역 연결 필요/)).toBeVisible();await expect(partPacket.getByRole('button',{name:'전달자료 생성',exact:true})).toBeDisabled();
   await page.goto('/?tab=schedule');await page.getByLabel('언어 / Language').selectOption('en');await page.getByRole('combobox',{name:'Schedule year',exact:true}).selectOption('2032');await page.locator('.month-tabs').getByRole('button',{name:'9',exact:true}).click();
   await page.setViewportSize({width:390,height:844});const first=page.getByTestId('schedule-day-'+day);await first.locator('summary').click();await first.getByRole('button',{name:'Manage',exact:true}).click();await expect(page.getByRole('dialog')).toContainText('Reschedule');expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);await page.screenshot({path:evidence+'/split-mobile-en.png',fullPage:true});
   expect(await db.aiCall.count()).toBe(calls);expect(errors).toEqual([]);

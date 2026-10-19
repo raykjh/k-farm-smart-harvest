@@ -26,7 +26,7 @@ export default function RegionalCropStandards(){
  const num=(v:string)=>v===''?null:Number(v),crop=cropCatalog.find(c=>c.id===profile.catalogProfileId);
  function opSet(index:number,patch:Partial<RegionalStandard['operations'][number]>){set('operations',profile.operations.map((o,i)=>i===index?{...o,...patch}:o));}
  return <section className={`${styles.editor} card section-space`}><div className="card-head"><a href="/references">← {t('작물 기준자료','Crop references')}</a><LanguageSelector/></div><h1>{t('작물 환경 기준·지역 보정','Crop conditions and regional overrides')}</h1>
- <p>{t('지역·작형별 작업 기준을 저장합니다. 검토 완료도 자동 배차 허가가 아니며, 이 화면은 기존 계획을 변경하지 않습니다.','Save regional work standards. Reviewed does not mean scheduling approval; existing plans are unchanged.')}</p>
+ 
  <p>{t('모르는 수확량·기온은 비워두세요. 시간은 1,000㎡당 분, 수확량은 1,000㎡당 kg입니다.','Leave unknown yield and temperature blank. Duration: minutes per 1,000 m². Yield: kg per 1,000 m².')}</p>
  <button type="button" onClick={()=>open()} disabled={busy}>{t('새 기준 작성','New standard')}</button> <button type="button" onClick={refresh} disabled={busy}>{t('목록 새로고침','Refresh list')}</button>
  <label>{t('저장된 기준 검색','Search saved standards')} <input value={filter} onChange={e=>setFilter(e.target.value)}/></label>

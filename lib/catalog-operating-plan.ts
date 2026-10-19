@@ -58,20 +58,19 @@ export function buildCatalogPlot(f:FieldEntry,context:GuidelineContext,cultivati
   const custom=context.operations?.[crop]?.[t.operationCode]??{};
   if(custom.machineCode&&custom.machineCode!==machineCode)throw Error('이 작업의 장비 수행 방식은 호환 검토 후 변경하세요.');
   const elapsed=m.minutesPer1000m2;
-  const crew={machineOperators:m.operators,ordinaryWorkers:f.mode==='joint'?0:m.workers,farmerWorkers:f.mode==='joint'?m.workers:0};
+  const crew={machineOperators:m.operators,ordinaryWorkers:m.workers,farmerWorkers:0};
   const req=operationRequirement(crop,t.operationCode,f.mode,{...custom,machineCode,laborMinutesPer1000m2:elapsed,setupMinutes:m.setupMinutes,staff:crew.machineOperators+crew.ordinaryWorkers,transport:m.transport});
   // The generic legacy defaults (e.g. rice planter) must not override this profile.
-  req.machineCode=machineCode??null;req.executionMethod=machineCode?'MANNED_MACHINE':'MANUAL';req.requiresOperator=!!machineCode;req.owner=machineCode?'장비':f.mode==='joint'?'농부':'센터 인력';
-  const staffingBlocked=f.mode==='joint'&&(f.conditions?.farmerCrew??1)<crew.farmerWorkers;
+  req.machineCode=machineCode??null;req.executionMethod=machineCode?'MANNED_MACHINE':'MANUAL';req.requiresOperator=!!machineCode;req.owner=machineCode?'장비':'센터 인력';
   return {id:key(t),cultivationId:cultivation?.id??null,operationKey:key(t),operationCode:t.operationCode,occurrence:t.occurrence,part:t.part,
    predecessorKeys:t.predecessors.map(id=>key(compiled.find(p=>p.id===id)!)),requirements:req,crew,
-   workAreaM2:t.workAreaM2,compatibilityCrop:machineCode?crop:null,executionBlocked:op.kind==='CONDITIONAL'?'예찰·처방 확인 후 작업계획 등록 필요':staffingBlocked?'농부 측 필요 작업인원 확인 필요':null,
+   workAreaM2:t.workAreaM2,compatibilityCrop:machineCode?crop:null,executionBlocked:op.kind==='CONDITIONAL'?'예찰·처방 확인 후 작업계획 등록 필요':null,
    condition:op.condition,executionReviewRequired:op.kind==='CONDITIONAL',
    name:t.label+(op.windows.length>1?` (${t.occurrence}회차)`:'')+(t.part>1?` (${t.part}일차)`:''),date:null,
    window:{from:t.from,to:t.to,basis:'CATALOG_DEMO_INPUT'},allowedWindows:null as {from:string;to:string}[]|null,
    timing:`${t.from} ~ ${t.to}`,kind:(op.kind==='REQUIRED'?'PROCESS':op.kind) as 'PROCESS'|'INSPECTION'|'CONDITIONAL'|'REPEAT',
    predecessor:null,assignee:null,equipmentId:null,status:'WAITING_CONDITIONS' as const,
-   blockers:['RIGHTS_PENDING','REGIONAL_TIMING_REVIEW','RESOURCE_UNASSIGNED','SAFETY_CONDITIONS_UNVERIFIED',...(staffingBlocked?['FARMER_CREW_REQUIRED']:[])],
+   blockers:['RIGHTS_PENDING','REGIONAL_TIMING_REVIEW','RESOURCE_UNASSIGNED','SAFETY_CONDITIONS_UNVERIFIED'],
   };
  });
  return {cultivationId:cultivation?.id??null,pnu:f.pnu,address:f.address,area:f.area!,crop,group:f.group,mode:f.mode,consultationId:f.consultationId??null,rights:f.rights,

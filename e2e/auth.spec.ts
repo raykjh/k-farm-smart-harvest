@@ -9,7 +9,7 @@ test('login, create a center account, actor autofill and logout enforce server p
   expect((await request.get('/api/fields')).status()).toBe(401);
   await page.goto('/');await expect(page).toHaveURL(/\/login$/);
   await page.getByLabel('아이디',{exact:true}).fill(username);await page.getByLabel('비밀번호',{exact:true}).fill(password);await page.getByRole('button',{name:'로그인',exact:true}).click();await expect(page).toHaveURL(/\/accounts$/);
-  await page.getByLabel('아이디',{exact:true}).fill(manager);await page.getByLabel('이름',{exact:true}).fill('E2E manager');await page.getByLabel('비밀번호 (12자 이상)',{exact:true}).fill(password);await page.getByRole('combobox',{name:'권한',exact:true}).selectOption('CENTER_ADMIN');await page.getByRole('button',{name:'계정 생성'}).click();await expect(page.getByText(manager,{exact:true})).toBeVisible();
+  await page.getByLabel('아이디',{exact:true}).fill(manager);await page.getByLabel('이름',{exact:true}).fill('E2E manager');await page.getByLabel('비밀번호 (12자 이상)',{exact:true}).fill(password);await page.getByRole('combobox',{name:'권한',exact:true}).selectOption('CENTER_ADMIN');await page.getByLabel('담당 센터',{exact:true}).selectOption('demo');await page.getByRole('button',{name:'계정 생성'}).click();await expect(page.getByText(manager,{exact:true})).toBeVisible();
   expect(await page.evaluate(async()=> (await fetch('/api/fields')).status)).toBe(403);
   await page.getByRole('button',{name:'로그아웃'}).click();await expect(page).toHaveURL(/\/login$/);
   await page.getByLabel('아이디',{exact:true}).fill(manager);await page.getByLabel('비밀번호',{exact:true}).fill(password);await page.getByRole('button',{name:'로그인',exact:true}).click();await expect(page).toHaveURL(/\/password$/);

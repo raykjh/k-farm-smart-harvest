@@ -24,7 +24,7 @@ it('pending applications cannot sign in; only a supervisor can assign a center r
   await expect(approveApplication(principal,{id,role:'SUPER_ADMIN',centerId:'demo'})).rejects.toThrow();
   const approvals=await Promise.allSettled([approveApplication(principal,{id,role:'CENTER_STAFF',centerId:'demo'}),approveApplication(principal,{id,role:'CENTER_ADMIN',centerId:'demo'})]);
   expect(approvals.filter(a=>a.status==='fulfilled')).toHaveLength(1);const user=(approvals.find(a=>a.status==='fulfilled') as PromiseFulfilledResult<any>).value;userId=user.id;
-  expect((await login(username,password)).user.id).toBe(userId);
+  expect((await login(username,password)).user.id).toBe(userId);expect(user.birth).toBe(input.birth);expect(user.phone).toBe(input.phone);
   const approved=(await db.workRecord.findUniqueOrThrow({where:{workspace_kind_id:authKey('application',id)}})).payload as AccountApplication;expect(approved.passwordHash).toBe('');
   await expect(submitApplication(input)).rejects.toThrow('사용 중');
  }finally{

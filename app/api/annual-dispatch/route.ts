@@ -21,10 +21,13 @@ import {readShortForecast} from '@/lib/kma-forecast';
 import {readCenterWeatherConfig} from '@/lib/center-settings-store';
 import {weatherHash} from '@/lib/annual-replanning';
 import {SCHEDULING_ENGINE_VERSION} from '@/lib/scheduling-engine';
+import {applyRegistrationOrigins} from '@/lib/registration-origin';
+async function assertOpenCycle(tx:Pick<Prisma.TransactionClient,'workRecord'>,id:string|null|undefined){if(!id)return;const row=await tx.workRecord.findUnique({where:{workspace_kind_id:{workspace:recordSpace(),kind:'cultivation',id}}});if((row?.payload as any)?.closedAt)throw Error('종료된 재배계획은 다시 배정할 수 없습니다.');}
 const hash=(x:unknown)=>createHash('sha256').update(JSON.stringify({engine:SCHEDULING_ENGINE_VERSION,value:x})).digest('hex');
 async function handleGET(req:NextRequest){try{
  const cultivationId=req.nextUrl.searchParams.get('cultivationId');
  const year=Number(req.nextUrl.searchParams.get('year'));if(cultivationId)z.string().uuid().parse(cultivationId);else if(!Number.isInteger(year)||year<2000||year>2200)throw Error();
+ await assertOpenCycle(db,cultivationId);
  const kind=cultivationId?'cultivationPlan':'annualPlan',id=cultivationId??String(year);
  const plans=await db.$queryRaw<{payload:AnnualPlan}[]>`SELECT payload FROM "WorkRecord" WHERE workspace=${recordSpace()} AND kind=${kind} AND id=${id}`;
  const fields=await db.$queryRaw<{version:number;payload:FieldEntry[]}[]>`SELECT version,payload FROM "WorkRecord" WHERE workspace=${recordSpace()} AND kind='fields' AND id='current'`;
@@ -34,13 +37,13 @@ async function handleGET(req:NextRequest){try{
  return NextResponse.json({...preview,token:hash({plan:plans[0].payload,state:resources,placement:dispatchPlacementKey(preview.assignments)}),year:plans[0].payload.year,cultivationId},{headers:{'Cache-Control':'no-store'}});
  }catch{return NextResponse.json({error:'최신 농지 기준 계획 초안을 먼저 생성하세요.'},{status:409})}}
 async function handlePOST(req:NextRequest){
- if(!['127.0.0.1:3100','localhost:3100'].includes(req.headers.get('host')??'')||(req.headers.get('origin')&&!['http://127.0.0.1:3100','http://localhost:3100'].includes(req.headers.get('origin')!)))return NextResponse.json({error:'출처 거부'},{status:403});
  try{const b=z.object({year:z.number().int().min(2000).max(2200).optional(),cultivationId:z.string().uuid().optional(),token:z.string().regex(/^[a-f0-9]{64}$/),demoAcknowledged:z.literal(true)}).strict().refine(b=>!!b.cultivationId||b.year!==undefined).parse(await req.json());
  const kind=b.cultivationId?'cultivationPlan':'annualPlan',id=b.cultivationId??String(b.year);
  const result=await db.$transaction(async tx=>{
  await tx.$queryRaw`SELECT id FROM "Center" WHERE id=${activeCenterId()} FOR UPDATE`;
  const prior=await tx.$queryRaw<{payload:any}[]>`SELECT payload FROM "WorkRecord" WHERE workspace=${recordSpace()} AND kind='annualDispatchApproval' AND id=${b.token}`;
  if(prior[0])return {...prior[0].payload,alreadyApplied:true};
+ await assertOpenCycle(tx,b.cultivationId);
  const fields=await tx.$queryRaw<{version:number;payload:FieldEntry[]}[]>`SELECT version,payload FROM "WorkRecord" WHERE workspace=${recordSpace()} AND kind='fields' AND id='current' FOR UPDATE`;
  const plans=await tx.$queryRaw<{payload:AnnualPlan}[]>`SELECT payload FROM "WorkRecord" WHERE workspace=${recordSpace()} AND kind=${kind} AND id=${id} FOR UPDATE`;
  const row=await tx.center.findUniqueOrThrow({where:{id:activeCenterId()}}),s=await resourceView(tx,row.state as unknown as State,activeCenterId()),plan=plans[0]?.payload;
@@ -62,6 +65,15 @@ async function handlePOST(req:NextRequest){
  const names:Record<string,string>={};
  for(const p of plan.plots)if(p.consultationId){const contacts=await tx.$queryRaw<{payload:{farmer:{name:string}}}[]>`SELECT payload FROM "WorkRecord" WHERE workspace=${recordSpace()} AND kind='consultation' AND id=${p.consultationId}`;if(contacts[0])names[p.consultationId]=contacts[0].payload.farmer.name;}
  const planned=appendAssignments(s,plan,preview,names);s.fields=planned.fields;s.missions=planned.missions;
+ await applyRegistrationOrigins(tx,s);
+ const selectedCrops=new Map<string,FieldEntry['crop']>();
+ for(const p of plan.plots){const field=s.fields.find(f=>f.id===p.pnu);if(field&&(field.serviceStatus==='CROP_REQUIRED'||!beforeState.fields.find(f=>f.id===p.pnu)?.crop&&!fields[0].payload.find(f=>f.pnu===p.pnu)?.crop)){
+  selectedCrops.set(p.pnu,p.crop as FieldEntry['crop']);
+  delete field.serviceStatus;field.crop=planned.missions.find(m=>m.fieldId===p.pnu&&preview.assignments.some(a=>a.taskId===m.id))?.crop??field.crop;
+  const pk={workspace:recordSpace(),kind:'fieldParticipation',id:p.pnu},participation=await tx.workRecord.findUnique({where:{workspace_kind_id:pk}});
+  if(participation)await tx.workRecord.update({where:{workspace_kind_id:pk},data:{version:{increment:1},payload:{...participation.payload as object,status:'ACTIVE',reason:'작물 재선택 및 배차 확정',changedAt:new Date().toISOString()}}});
+ }}
+ if(selectedCrops.size){const payload=fields[0].payload.map(f=>selectedCrops.has(f.pnu)?{...f,crop:selectedCrops.get(f.pnu)!,group:''}:f);await tx.workRecord.update({where:{workspace_kind_id:{workspace:recordSpace(),kind:'fields',id:'current'}},data:{version:{increment:1},payload:JSON.parse(JSON.stringify(payload))}});}
  const farmers=new Set<string>();
  for(const a of preview.assignments){const f=s.fields.find(f=>f.id===a.pnu)!;if(f.farmerId)farmers.add(f.farmerId);
  await tx.$executeRaw`INSERT INTO "WorkRecord" (workspace,kind,id,version,payload) VALUES (${recordSpace()},'annualReservation',${a.taskId},1,${JSON.stringify({...a,source:'PLANNING_SIMULATION',status:'RESERVED',approvedAt:new Date().toISOString(),approvedBy:actorLabel()})}::jsonb)`;
@@ -69,7 +81,7 @@ async function handlePOST(req:NextRequest){
  }
  await syncChangedPlanReservations(tx,activeCenterId(),beforeState,s,preview.assignments.map(a=>a.taskId),actorLabel());
  s.planVersion++;await tx.center.update({where:{id:activeCenterId()},data:{state:s as unknown as Prisma.InputJsonValue,version:{increment:1}}});
- for(const farmerId of farmers)await tx.outbox.create({data:{id:'annual:'+b.token+':'+farmerId,centerId:activeCenterId(),farmerId,planVersion:s.planVersion,body:'[모의 알림] 연간계획의 장비 작업이 배정되었습니다. 작업 전 현장·기상 확인 후 진행합니다.'}});
+ for(const farmerId of farmers)await tx.outbox.create({data:{status:'RECORDED_ONLY',id:'annual:'+b.token+':'+farmerId,centerId:activeCenterId(),farmerId,planVersion:s.planVersion,body:'[모의 알림] 연간계획의 장비 작업이 배정되었습니다. 작업 전 현장·기상 확인 후 진행합니다.'}});
  const saved={ok:true,assigned:preview.assignments.length,pending:preview.pending.length,planVersion:s.planVersion,notifications:farmers.size};
  await tx.$executeRaw`INSERT INTO "WorkRecord" (workspace,kind,id,version,payload) VALUES (${recordSpace()},'annualDispatchApproval',${b.token},1,${JSON.stringify(saved)}::jsonb)`;
  return saved;

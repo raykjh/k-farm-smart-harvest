@@ -1,5 +1,6 @@
 import type {Mission, State} from './types';
 import {operatingCrewDemands} from './operating-capacity';
+import {taskCrewStaff} from './planned-labor-demand';
 
 /** Occupancy of one 15-minute slot. Field exclusivity is deliberately
  * conservative until a reviewed operation explicitly supports parallel work. */
@@ -22,8 +23,8 @@ export function missionResourceUse(state: State, mission: Pick<Mission,'fieldId'
  return {
   field: mission.fieldId,
   resource: mission.resourceId,
-  person: mission.owner === '농부' || (mission.farmerWorkers??0)>0 ? farmerId || state.fields.find(f => f.id === mission.fieldId)?.farmerId || mission.fieldId : null,
-  staff: mission.owner === '농부' ? 0 : Math.max(1, mission.staff),
+  person: null,
+  staff: taskCrewStaff(mission),
   transport: mission.transport,
   capacityDemands:operatingCrewDemands(state,mission),
  };

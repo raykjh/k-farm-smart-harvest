@@ -2,7 +2,7 @@
 import {useEffect,useRef,type ReactNode} from 'react';
 import {createPortal} from 'react-dom';
 import {useLanguage} from './language';
-export default function Modal({title,onClose,children}:{title:string;onClose:()=>void;children:ReactNode}){
+export default function Modal({title,onClose,children,className=''}:{title:string;onClose:()=>void;children:ReactNode;className?:string}){
  const ref=useRef<HTMLDialogElement>(null),{locale}=useLanguage();
  useEffect(()=>{
   const previous=document.activeElement as HTMLElement|null,el=ref.current;
@@ -23,5 +23,5 @@ export default function Modal({title,onClose,children}:{title:string;onClose:()=
   window.addEventListener('resize',schedule);window.addEventListener('scroll',schedule,true);
   return()=>{observer.disconnect();cancelAnimationFrame(frame);window.removeEventListener('resize',schedule);window.removeEventListener('scroll',schedule,true);el.close();previous?.focus()};
  },[]);
- return createPortal(<dialog ref={ref} className="work-modal" onCancel={e=>{e.preventDefault();onClose()}} aria-label={title}><header className="card-head"><h2>{title}</h2><button type="button" onClick={onClose} aria-label={locale==='ko'?'닫기':'Close'}>✕</button></header>{children}</dialog>,document.body);
+ return createPortal(<dialog ref={ref} className={`work-modal ${className}`} onCancel={e=>{e.preventDefault();onClose()}} aria-label={title}><header className="card-head"><h2>{title}</h2><button type="button" onClick={onClose} aria-label={locale==='ko'?'닫기':'Close'}>✕</button></header>{children}</dialog>,document.body);
 }

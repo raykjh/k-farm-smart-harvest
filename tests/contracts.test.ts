@@ -17,16 +17,16 @@ beforeEach(async()=>{
 afterAll(async()=>{await db.$disconnect()});
 async function prepare(){await api.register(randomUUID(),'A',3000,true,true,true);await api.choose(randomUUID(),[{fieldId:'A',crop:'쌀',mode:'공동참여형'},{fieldId:'B',crop:'감자',mode:'완전 위탁형'},{fieldId:'C',crop:'고추',mode:'공동참여형'}]);await api.plan(randomUUID());}
 describe('first vertical slice',()=>{
- it('register → recommend → plan → wind → replan → batch apply → retry notification',async()=>{
+ it('register → recommend → plan → wind → replan → batch apply → retain notice records',async()=>{
   await prepare();let {state:s}=await api.read();const groundStart=s.missions.find(m=>m.id==='B-2')!.start;expect(s.missions).toHaveLength(546);expect(new Set(s.missions.map(m=>m.id)).size).toBe(546);validate(s);
   await api.wind(randomUUID());const result=await api.replan(randomUUID()) as {revisionId:string};
   s=(await api.read()).state;expect(s.planVersion).toBe(1);expect(s.revisions[0].status).toBe('REVIEW_REQUIRED');expect(s.revisions[0].diff.length).toBeGreaterThan(0);
   const key=randomUUID();await api.approve(key,result.revisionId);await api.approve(key,result.revisionId);await api.approve(randomUUID(),result.revisionId);
   const data=await api.read();expect(data.state.planVersion).toBe(2);expect(data.notices).toHaveLength(data.state.revisions[0].diff.length);validate(data.state);expect(jobs(data.state).filter(m=>m.resourceId?.startsWith('D')).every(m=>m.start>=32)).toBe(true);
   expect(data.state.missions.find(m=>m.id==='B-2')!.start).toBe(groundStart);expect(groundStart).toBeLessThan(32);expect(data.state.missions.find(m=>m.id==='B-2')!.status).toBe('PLANNED');expect(data.state.revisions[0].diff.some(d=>d.missionId==='B-2')).toBe(false);
-  await api.deliver(true);expect((await api.read()).notices.every(n=>n.status==='FAILED')).toBe(true);
+  expect(await api.deliver(true)).toEqual({delivered:0,attempted:0,provider:'OWNER_SMS_DISABLED'});
   await db.outbox.updateMany({data:{availableAt:new Date(0)}});await api.deliver();await api.deliver();
-  expect((await api.read()).notices.every(n=>n.status==='DELIVERED'&&n.attempts===2)).toBe(true);
+  expect((await api.read()).notices.every(n=>n.status==='RECORDED_ONLY'&&n.attempts===0&&n.sentAt===null)).toBe(true);
  });
  it('rejects old proposal after safety lock and does not unlock or generate notices',async()=>{
   await prepare();await api.wind(randomUUID());const r=await api.replan(randomUUID()) as {revisionId:string};await api.lock(randomUUID(),'D1');

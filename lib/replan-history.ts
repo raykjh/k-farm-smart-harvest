@@ -2,8 +2,8 @@ import {recordSpace} from './workspace';
 import {db} from './db';
 import {executionStatus,type ExecutionView} from './execution-view';
 import type {State} from './types';
-export async function readExecutionHistory(client:Pick<typeof db,'$queryRaw'>=db){
- const rows=await client.$queryRaw<{payload:ExecutionView}[]>`SELECT payload FROM "WorkRecord" WHERE workspace=${recordSpace()} AND kind='taskExecutionAssessment' ORDER BY "updatedAt" DESC,id`;
+export async function readExecutionHistory(client:Pick<typeof db,'$queryRaw'>=db,workspace=recordSpace()){
+ const rows=await client.$queryRaw<{payload:ExecutionView}[]>`SELECT payload FROM "WorkRecord" WHERE workspace=${workspace} AND kind='taskExecutionAssessment' ORDER BY "updatedAt" DESC,id`;
  const seen=new Set<string>();return rows.map(r=>r.payload).filter(r=>{if(seen.has(r.missionId))return false;seen.add(r.missionId);return true});
 }
 export function planningState(raw:State,history:ExecutionView[]){

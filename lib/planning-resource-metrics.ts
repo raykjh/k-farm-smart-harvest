@@ -2,6 +2,7 @@ import type {State} from './types';
 import type {calculateAnnualReplan} from './annual-replanning';
 import {isClosedTask} from './task-lifecycle';
 import {slotDate} from './scheduling-engine';
+import {isReserveSupport} from './center-reserve';
 
 /** Compare the same whole-center future plan, not different solver scopes.
  * Work minutes only: rates, travel and resulting yield/profit are not inferred. */
@@ -17,7 +18,7 @@ export function planningResourceMetrics(state:State,result:Awaited<ReturnType<ty
   if(m.resourceOccupancyOnly||isClosedTask(m.status)||!m.scheduledDate||m.scheduledDate<asOf)continue;
   const machine=state.machines.find(r=>r.id===m.resourceId);
   if(machine?.ownerCenterId&&machine.ownerCenterId!==(state.centerSharing?.centerId??'demo'))borrowedEquipmentMinutes+=m.duration*15;
-  supportPersonMinutes+=(m.laborSupportIds?.length??0)*m.duration*15;
+  supportPersonMinutes+=(m.laborSupportIds?.filter(id=>!isReserveSupport(id)).length??0)*m.duration*15;
  }
  return {borrowedEquipmentMinutes,supportPersonMinutes};
 }

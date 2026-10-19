@@ -4,7 +4,7 @@ import {NextRequest,NextResponse} from 'next/server';
 import {Prisma} from '@prisma/client';
 import {db} from '@/lib/db';
 import {inWorkspace,parseWorkspace,centerId} from '@/lib/workspace';
-import {initialState} from '@/lib/seed';
+import {retiredDemoWorkflow} from '@/lib/legacy-demo-boundary';
 import {emptyCenter} from '@/lib/center-registry';
 import {resourceView} from '@/lib/center-resources';
 import * as service from '@/lib/service';
@@ -25,12 +25,11 @@ async function handleGET(req:NextRequest){
  })}catch{return NextResponse.json({error:'작업 공간 또는 데이터베이스를 확인하세요.'},{status:503})}
 }
 async function handlePOST(req:NextRequest){
- const origin=req.headers.get('origin');
- if(!['127.0.0.1:3100','localhost:3100'].includes(req.headers.get('host')??'')||(origin&&!['http://127.0.0.1:3100','http://localhost:3100'].includes(origin)))return NextResponse.json({error:'허용되지 않은 출처'},{status:403});
- try{const body=await req.json();const selected=parseWorkspace(body.workspace);
-  if(body.action!=='initialize'&&body.action!=='injectDemo')throw Error('지원하지 않는 작업');
-  if(body.action==='injectDemo'&&centerId()!=='demo')throw Error('다른 센터에 계북면 자료를 넣을 수 없습니다.');
-  return await inWorkspace(selected,async()=>{const state=body.action==='injectDemo'?initialState():empty();
+ try{const body=await req.json();
+  if(body.action==='injectDemo')return NextResponse.json(retiredDemoWorkflow,{status:410});
+  if(body.action!=='initialize')throw Error('지원하지 않는 작업');
+  const selected=parseWorkspace(body.workspace??null);
+  return await inWorkspace(selected,async()=>{const state=empty();
    // Create-only: never overwrite a populated or initialized space.
    await db.center.create({data:{id:centerId(),state:state as unknown as Prisma.InputJsonValue}});
    return NextResponse.json({ok:true});

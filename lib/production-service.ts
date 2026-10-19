@@ -2,11 +2,12 @@ import {centerId as activeCenterId,recordSpace} from './workspace';
 import {resourceView} from './center-resources';
 import type {Prisma} from '@prisma/client';
 import {createHash} from 'node:crypto';
-import {planContinuousProduction,productionCriteria,serviceTerm,type Participation,type ProductionCriteria,type CropSelector} from './continuous-production';
+import {planContinuousProduction,productionCriteria,serviceTerm,type Participation,type ProductionCriteria,type CropSelector,type ProductionRunOptions} from './continuous-production';
 import {adviseOperatingCrop,replayOperatingCrop,type OperatingCropDecision} from './operating-crop-adviser';
 import type {FieldEntry} from './field-record';
 import type {Cultivation} from './cultivation';
 import type {State,Mission} from './types';
+import type {AnnualPlan} from './annual-plan';
 import {planningState,readExecutionHistory} from './replan-history';
 import {commitDelegatedPlans} from './delegated-commit';
 import {reservationSchema} from './shared-reservations';
@@ -17,7 +18,7 @@ import {coordinationVersion} from './production-coordination';
 export const productionKey=(kind:string,id='current')=>({where:{workspace_kind_id:{workspace:recordSpace(),kind,id}}});
 const json=(v:unknown)=>JSON.parse(JSON.stringify(v)) as Prisma.InputJsonValue;
 const hash=(v:unknown)=>createHash('sha256').update(JSON.stringify(v)).digest('hex');
-export const productionSourceHash=(v:unknown)=>hash({engine:SCHEDULING_ENGINE_VERSION,coordinationVersion,cropReviewVersion:2,value:v});
+export const productionSourceHash=(v:unknown)=>hash({engine:SCHEDULING_ENGINE_VERSION,coordinationVersion,cropReviewVersion:2,continuationVersion:2,value:v});
 export function savedCropSelector(view:any,strict=true):CropSelector{
  const decisions=new Map<string,OperatingCropDecision>((view?.items??[]).filter((i:any)=>i.decision?.source==='NEBIUS').map((i:any)=>[i.pnu,i.decision]));
  return async(pnu,facts)=>{const saved=decisions.get(pnu);if(!saved)return adviseOperatingCrop(facts,false);
@@ -30,26 +31,40 @@ export async function lockProduction(tx:Prisma.TransactionClient){
  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`fields:${recordSpace()}`}))`;
  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'production-coordination'}))`;
 }
-export async function readProductionSource(tx:Prisma.TransactionClient){
- const center=await tx.center.findUnique({where:{id:activeCenterId()}});
- const inventory=await tx.workRecord.findUnique(productionKey('fields'));
- const records=await tx.workRecord.findMany({where:{workspace:recordSpace(),kind:{in:['cultivation','consultation','fieldParticipation','productionCriteria','delegatedSettings']}},orderBy:{id:'asc'}});
+// Explicit scope is for server-side aggregate planning only. HTTP callers never
+// choose a commit scope; commits continue to use the authenticated center.
+export async function readProductionSource(tx:Prisma.TransactionClient,scopeId=activeCenterId()){
+ const center=await tx.center.findUnique({where:{id:scopeId}});
+ const inventory=await tx.workRecord.findUnique({where:{workspace_kind_id:{workspace:recordSpace(scopeId),kind:'fields',id:'current'}}});
+ const records=await tx.workRecord.findMany({where:{workspace:recordSpace(scopeId),kind:{in:['cultivation','cultivationPlan','consultation','fieldParticipation','productionCriteria','delegatedSettings']}},orderBy:{id:'asc'}});
+ // Historical missions may predate persisted operation kinds. Read the exact
+ // saved plan, never today's crop catalog, without rewriting any old record.
+ const operationKinds=records.filter(r=>r.kind==='cultivationPlan').flatMap(r=>{
+  const plan=r.payload as unknown as AnnualPlan;
+  return (plan.plots??[]).flatMap(p=>p.tasks.filter(t=>t.cultivationId===r.id).map(t=>({cultivationId:r.id,pnu:p.pnu,taskId:t.id,kind:t.kind})));
+ });
  const criteriaRow=records.find(r=>r.kind==='productionCriteria');
  const legacy=records.find(r=>r.kind==='delegatedSettings')?.payload as any;
  const criteria:ProductionCriteria=productionCriteria.parse(criteriaRow?.payload??{profiles:legacy?.context?[{id:'legacy',name:'기존 센터 작업 기준',context:legacy.context}]:[]});
  const contacts=records.filter(r=>r.kind==='consultation').map(r=>({id:r.id,payload:r.payload as any}));
  const shared=await tx.workRecord.findMany({where:{workspace:'shared',kind:'resourceReservation'},orderBy:{id:'asc'}});
- const history=await readExecutionHistory(tx);
- const today=productionToday(),coordination=await readProductionCoordination(tx,activeCenterId(),today);
- return {state:center?await resourceView(tx,center.state as unknown as State,activeCenterId()):undefined,fields:(inventory?.payload??[]) as FieldEntry[],version:inventory?.version??0,cycles:records.filter(r=>r.kind==='cultivation').map(r=>r.payload as unknown as Cultivation),participations:records.filter(r=>r.kind==='fieldParticipation').map(r=>r.payload as unknown as Participation),criteria,contacts,shared:shared.map(r=>r.payload),history,today,coordination};
+ const history=await readExecutionHistory(tx,recordSpace(scopeId));
+ const today=productionToday(),coordination=await readProductionCoordination(tx,scopeId,today);
+ return {scopeId,state:center?await resourceView(tx,center.state as unknown as State,scopeId):undefined,fields:(inventory?.payload??[]) as FieldEntry[],version:inventory?.version??0,cycles:records.filter(r=>r.kind==='cultivation').map(r=>r.payload as unknown as Cultivation),participations:records.filter(r=>r.kind==='fieldParticipation').map(r=>r.payload as unknown as Participation),criteria,contacts,shared:shared.map(r=>r.payload),history,today,coordination,operationKinds};
 }
 export type ProductionSource=Awaited<ReturnType<typeof readProductionSource>>;
-export async function calculateProduction(s:ProductionSource,selectCrop?:CropSelector){
+export async function calculateProduction(s:ProductionSource,selectCrop?:CropSelector,options:ProductionRunOptions={}){
  const empty:State={name:'센터',planVersion:0,fields:[],missions:[],machines:[],events:[],revisions:[],registered:false,planned:false,ruleVersion:'UNCONFIGURED',staffCount:0,transportCount:0};
  const state=planningState(s.state??empty,s.history);
+ const kinds=new Map(s.operationKinds.map(t=>[JSON.stringify([t.cultivationId,t.pnu,t.taskId]),t.kind]));
+ for(const m of state.missions){
+  if(m.kind)continue;
+  const kind=kinds.get(JSON.stringify([(m as Mission&{cultivationId?:string}).cultivationId,m.fieldId,m.id]));
+  if(kind)m.kind=kind;
+ }
  // Include foreign shared bookings as occupancy, never as executable local tasks.
  for(const payload of s.shared){
-  const r=reservationSchema.parse(payload);if(r.centerId===activeCenterId()||!state.machines.some(m=>m.id===r.resourceId))continue;
+  const r=reservationSchema.parse(payload);if(r.centerId===(s.scopeId??activeCenterId())||!state.machines.some(m=>m.id===r.resourceId))continue;
   const start=Math.max(Date.parse(r.from),Date.parse(s.today+'T00:00:00+09:00')),end=Date.parse(r.to);
   if(end-start>731*86400000)throw Error('장기간의 타 센터 예약을 확인하세요.');
   const firstDay=Date.parse(new Date(start+9*3600000).toISOString().slice(0,10)+'T00:00:00+09:00');
@@ -61,7 +76,7 @@ export async function calculateProduction(s:ProductionSource,selectCrop?:CropSel
  }
  const names=Object.fromEntries(s.contacts.map(c=>[c.id,c.payload.farmer?.name??'']));
  const consentedPnus=s.fields.filter(f=>s.contacts.some(c=>c.id===f.consultationId&&c.payload.consent===true&&c.payload.fields?.some((p:any)=>p.pnu===f.pnu&&p.mode==='delegated'&&p.tenure==='owned'))).map(f=>f.pnu);
- return {...(await planContinuousProduction({...s,state,names,consentedPnus},selectCrop)),...(!s.state?{error:'센터 장비·인력 등록이 필요합니다.'}:{})};
+ return {...(await planContinuousProduction({...s,state,names,consentedPnus},selectCrop,options)),...(!s.state?{error:'센터 장비·인력 등록이 필요합니다.'}:{})};
 }
 export async function refreshProduction(tx:Prisma.TransactionClient,force=false){
  await lockProduction(tx);
@@ -89,7 +104,9 @@ export async function approveProduction(tx:Prisma.TransactionClient,input:{reque
  const reviewed=(await tx.workRecord.findUnique(productionKey('continuousProduction')))?.payload as any;
  if(!source.state||reviewed?.fingerprint!==input.fingerprint||productionSourceHash(source)!==(reviewed?.sourceFingerprint??reviewed?.fingerprint))throw Error('농지·계획·참여조건·자원이 변경되었습니다. 다시 확인하세요.');
  if(reviewed.aiReviewError)throw Error('AI 검토 오류를 확인하세요. 다시 검토하거나 계산 기준으로 명시적으로 되돌린 뒤 승인하세요.');
- const view=(await calculateProduction(source,savedCropSelector(reviewed)));
+ const integrated=reviewed.integratedPlan;
+ if(integrated&&input.pnus.some(p=>!integrated.choices.some((c:{pnu:string})=>c.pnu===p)))throw Error('통합계획의 검토 대상과 승인 대상이 다릅니다.');
+ const view=(await calculateProduction(source,integrated?undefined:savedCropSelector(reviewed),integrated?{choices:integrated.choices}:{}));
  const selected=view.items.filter(i=>input.pnus.includes(i.pnu));
  if(new Set(input.pnus).size!==input.pnus.length||selected.length!==input.pnus.length||selected.some(i=>i.status!=='REVIEW'||!i.proposal))throw Error('확정 가능한 새 계획을 선택하세요.');
  const plans=selected.map(i=>i.proposal!);
@@ -99,7 +116,14 @@ export async function approveProduction(tx:Prisma.TransactionClient,input:{reque
  }))throw Error('계산된 배치가 검토한 내용과 다릅니다. 새 계획을 확인하세요.');
  const names=Object.fromEntries(source.contacts.map(c=>[c.id,c.payload.farmer?.name??'']));
  const result=await commitDelegatedPlans(tx,{...source,state:source.state,plans,names,proposalId:input.requestId,actor});
- await tx.workRecord.create({data:{workspace:recordSpace(),kind:'productionApproval',id:input.requestId,payload:json({actor,inputHash:hash(input),input,plans,decisions:selected.map(i=>({pnu:i.pnu,decision:i.decision})),result,approvedAt:new Date().toISOString()})}});
+ await tx.workRecord.create({data:{workspace:recordSpace(),kind:'productionApproval',id:input.requestId,payload:json({actor,inputHash:hash(input),input,plans,decisions:selected.map(i=>({pnu:i.pnu,decision:i.decision})),...(integrated?{integratedPlan:integrated}:{}),result,approvedAt:new Date().toISOString()})}});
+ if(integrated){
+  const jobs=await tx.workRecord.findMany({where:{workspace:recordSpace(),kind:'productionAutoJob'}});
+  for(const job of jobs.filter(r=>(r.payload as any).requestId===integrated.requestId)){
+   const p=job.payload as any,approvedPnus=[...new Set([...(p.approvedPnus??[]),...input.pnus])];
+   await tx.workRecord.update({where:{workspace_kind_id:{workspace:job.workspace,kind:job.kind,id:job.id}},data:{payload:json({...p,approvedPnus,status:integrated.choices.every((c:{pnu:string})=>approvedPnus.includes(c.pnu))?'CONFIRMED':'PARTIALLY_CONFIRMED',approvedAt:new Date().toISOString()}),version:{increment:1},updatedAt:new Date()}});
+  }
+ }
  await tx.audit.create({data:{centerId:activeCenterId(),action:'production.continuous.approve',detail:json({actor,...input,...result})}});
  await refreshProduction(tx);
  return result;

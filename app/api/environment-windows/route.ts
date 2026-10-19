@@ -9,7 +9,6 @@ async function handleGET(){
  }catch{return NextResponse.json({error:'기상자료 조회 실패'},{status:503});}
 }
 async function handlePOST(req:Request){
- if(!['http://127.0.0.1:3100','http://localhost:3100'].includes(req.headers.get('origin')??''))return NextResponse.json({error:'Origin rejected'},{status:403});
  try{
  const b=z.object({datasetId:z.string().min(1),year:z.number().int().min(2000).max(2200),basis:z.enum(['NORMAL','OBSERVED']),rule:environmentRuleSchema}).strict().parse(await req.json());
  const record=await db.workRecord.findUnique({where:{workspace_kind_id:{workspace:'shared',kind:'climateNormals',id:b.datasetId}}});

@@ -1,4 +1,5 @@
 import {isClosedTask} from './task-lifecycle';
+import {taskCrewStaff} from './planned-labor-demand';
 import type {State,Mission} from './types';
 import {snapshot} from './scheduler';
 import {restricted} from './weather';
@@ -28,8 +29,8 @@ export function taskScheduleOptions(s:State,id:string,preferred:string){
    for(let slot=start;slot<start+m.duration;slot++){
     const active=peers.filter(x=>x.start<=slot&&slot<x.start+x.duration);
     if(m.resourceId&&active.some(x=>x.resourceId===m.resourceId)){valid=false;break;}
-    if(m.owner==='농부'&&active.some(x=>x.fieldId===m.fieldId&&x.owner==='농부')){valid=false;break;}
-    const staff=(x:Mission)=>x.owner==='농부'?0:Math.max(1,x.staff);
+    if(active.some(x=>x.fieldId===m.fieldId)){valid=false;break;}
+    const staff=taskCrewStaff;
     if(active.reduce((n,x)=>n+staff(x),staff(m))>s.staffCount||active.reduce((n,x)=>n+x.transport,m.transport)>s.transportCount){valid=false;break;}
    }
    if(valid){const minutes=480+hour*15;options.push({date,start,label:date+' '+String(Math.floor(minutes/60)).padStart(2,'0')+':'+String(minutes%60).padStart(2,'0')});break;}

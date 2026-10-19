@@ -2,7 +2,10 @@ import {cropReferences,emptyLedger,estimateProduction,replaceContribution,type P
 import type {State,Field} from './types';
 // Existing synthetic fields have no confirmed practice/harvest quarter. Never call these national data.
 function contribution(f:Field,existing?:Contribution):Contribution|null{
- if(!f.crop)return null;const ref=cropReferences.find(r=>r.crop===f.crop)!;
+ if(!f.crop)return null;const ref=cropReferences.find(r=>r.crop===f.crop);
+ // The operational crop catalog is wider than this legacy yield baseline.
+ // Missing yield evidence must not block a registered crop or imply zero yield.
+ if(!ref)return null;
  if(existing&&existing.referenceId===ref.id){
   if(existing.areaM2===f.area)return existing;
   // An area edit scales the pinned historical basis, not the latest catalog revision.

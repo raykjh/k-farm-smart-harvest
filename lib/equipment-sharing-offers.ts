@@ -6,6 +6,7 @@ import {geographicNeighbors} from './center-adjacency';
 import {lockCenterPool} from './center-resources';
 import type {EquipmentLoan} from './center-sharing';
 import {recordResourceNotice} from './center-resource-notices';
+import {sameEquipmentKind} from './equipment-code';
 // Exclusive equipment day; deduct outbound/loading/return time from work hours.
 export const sharingOfferSchema=z.object({id:z.string().uuid(),version:z.number().int().nonnegative(),machineId:z.string().min(1),borrowerCenterId:z.string().min(1),
  from:z.string().date(),to:z.string().date(),compatibleMachineIds:z.array(z.string().min(1)).min(1).max(100),
@@ -23,7 +24,7 @@ export async function saveSharingOffer(tx:Prisma.TransactionClient,raw:unknown,a
  if(!m)throw Error('소유 장비만 사전 공유를 설정할 수 있습니다.');
  if(b.enabled&&b.borrowerCenterId!==actor.centerId&&!(await geographicNeighbors(tx,actor.centerId)).includes(b.borrowerCenterId))throw Error('면 경계가 직접 인접한 센터만 공유할 수 있습니다.');
  const borrower=await tx.center.findUniqueOrThrow({where:{id:b.borrowerCenterId}}),targets=(borrower.state as unknown as State).machines;
- if(b.enabled&&b.compatibleMachineIds.some(id=>!targets.some(t=>t.id===id&&t.type===m.type&&Number.isFinite(m.capacityHaHour)&&m.capacityHaHour>0&&t.capacityHaHour>0)))throw Error('호환 대상으로 지정한 장비의 종류·처리능력을 확인하세요.');
+ if(b.enabled&&b.compatibleMachineIds.some(id=>!targets.some(t=>t.id===id&&sameEquipmentKind(t,m)&&Number.isFinite(m.capacityHaHour)&&m.capacityHaHour>0&&t.capacityHaHour>0)))throw Error('호환 대상으로 지정한 장비의 종류·처리능력을 확인하세요.');
  if(b.borrowerCenterId!==actor.centerId&&(!b.outboundSlots||!b.returnSlots))throw Error('인근 센터 이동·상하차·복귀 시간을 입력하세요.');
  const key={workspace:'shared',kind:'equipmentSharingOffer',id:b.id},old=await tx.workRecord.findUnique({where:{workspace_kind_id:key}});
  if((old?.version??0)!==b.version)throw Error('공유 조건이 변경되었습니다. 다시 확인하세요.');

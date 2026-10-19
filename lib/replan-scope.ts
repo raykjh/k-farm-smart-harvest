@@ -1,5 +1,6 @@
 import type {Mission,State} from './types';
 import {isClosedTask} from './task-lifecycle';
+import {taskCrewStaff} from './planned-labor-demand';
 type ScopedMission=Mission&{planningLocked?:boolean;executionStartedAt?:string;safetyLock?:boolean;planningWindow?:{from:string;to:string};predecessorMissionIds?:string[]};
 export const immovable=(m:Mission)=>isClosedTask(m.status)||!!m.resourceOccupancyOnly||!!(m as ScopedMission).planningLocked||!!(m as ScopedMission).executionStartedAt||!!(m as ScopedMission).safetyLock;
 /** Minimal connected conflict scope inside the already-scoped home-center state.
@@ -15,10 +16,9 @@ export function relatedReplanIds(s:State,ids:string[],asOf:string){
     const sameMachine=!!m.resourceId&&m.resourceId===a.resourceId;
     const sameField=!!m.fieldId&&m.fieldId===a.fieldId;
     const sameOperator=(m.operatorIds?.some(id=>a.operatorIds?.includes(id))??false)||(m.laborSupportIds?.some(id=>a.laborSupportIds?.includes(id))??false);
-    const samePerson=m.owner==='농부'&&a.owner==='농부'&&(s.fields.find(f=>f.id===m.fieldId)?.farmerId||m.fieldId)===(s.fields.find(f=>f.id===a.fieldId)?.farmerId||a.fieldId);
     const overlapGroup=candidates.filter(t=>(t.planningWindow?.from??t.scheduledDate!)<=at&&af<=(t.planningWindow?.to??t.scheduledDate!));
-    const capacity=(m.owner!=='농부'&&a.owner!=='농부'&&overlapGroup.reduce((n,t)=>n+(t.owner==='농부'?0:Math.max(1,t.staff)),0)>s.staffCount)||(m.transport>0&&a.transport>0&&overlapGroup.reduce((n,t)=>n+t.transport,0)>s.transportCount);
-    if(dep||overlaps&&(sameField||sameMachine||samePerson||sameOperator||capacity)){related.add(m.id);expanded=true;break;}
+    const capacity=(overlapGroup.reduce((n,t)=>n+taskCrewStaff(t),0)>s.staffCount)||(m.transport>0&&a.transport>0&&overlapGroup.reduce((n,t)=>n+t.transport,0)>s.transportCount);
+    if(dep||overlaps&&(sameField||sameMachine||sameOperator||capacity)){related.add(m.id);expanded=true;break;}
    }
   }
  }return related;

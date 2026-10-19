@@ -1,0 +1,28 @@
+import {test,expect} from './authenticated-test';
+test('registration distinguishes actual use, cadastral use and facility environment without saving',async({page})=>{
+ const parcel={pnu:'5274036023106160004',address:'전북특별자치도 장수군 계북면 농소리 616-4'},geometry={type:'Polygon',coordinates:[[[127.62,35.78],[127.6202,35.78],[127.6202,35.7802],[127.62,35.78]]]};
+ let submitted:any;const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.route('**/api/parcels?*',route=>route.fulfill({json:new URL(route.request().url()).searchParams.has('pnu')?{status:'READY',geometry}:{status:'READY',items:[parcel]}}));
+ await page.route('**/api/map-tile?*',r=>r.abort());
+ await page.route('**/api/fields',r=>r.fulfill({json:{version:0,fields:[]}}));
+ await page.route('**/api/registrations',route=>{submitted=route.request().postDataJSON();return route.fulfill({status:409,json:{error:'UI verification only. Nothing saved.'}})});
+ await page.goto('/register');const form=page.getByTestId('field-registration');
+ await form.getByLabel('이름',{exact:true}).fill('홍검증');await form.getByLabel('생년월일',{exact:true}).fill('19600101');
+ await form.getByLabel('주소',{exact:true}).fill('계북면 검증 주소');await form.getByLabel('연락처',{exact:true}).fill('00000000000');
+ await form.getByRole('button',{name:'다음',exact:true}).click();await form.getByRole('button',{name:'소유농지 조회',exact:true}).click();
+ await form.getByRole('button',{name:'지번으로 농지 추가',exact:true}).click();await form.getByLabel('지번 검색어').fill(parcel.address);
+ await form.getByRole('button',{name:'브이월드 지번 검색',exact:true}).click();await form.getByRole('button',{name:'필지 선택',exact:true}).click();await form.getByRole('button',{name:'필지 초안에 추가',exact:true}).click();
+ await form.getByLabel(parcel.address+' 작업면적',{exact:true}).fill('1000');await form.getByLabel(parcel.address+' 토지형태',{exact:true}).selectOption('paddy');
+ await form.getByRole('button',{name:'선택 농지 저장',exact:true}).click();await form.getByRole('button',{name:'다음',exact:true}).click();
+ await form.getByText('농지·기후 확인값',{exact:true}).click();await form.getByText('농지·지역 조건 확인 및 추천 근거',{exact:true}).click();
+ await expect(form.getByLabel('공부상 지목',{exact:true})).toHaveValue('');await expect(form.getByLabel('재배 환경',{exact:true})).toHaveValue('');
+ await form.getByLabel('공부상 지목',{exact:true}).selectOption('paddy');await form.getByLabel('현 이용형태',{exact:true}).selectOption('upland');await form.getByLabel('재배 환경',{exact:true}).selectOption('unheated_greenhouse');
+ await expect(form).toContainText('시설 재배 작업 기준 검토 후 계획할 수 있습니다.');
+ await form.getByRole('checkbox',{name:/정보 이용 및 작물 선택 위임/}).check();await form.getByRole('button',{name:'다음',exact:true}).click();
+ await expect.poll(()=>submitted?.consultation.fields.length).toBe(1);
+ expect(submitted.consultation.fields[0]).toMatchObject({conditions:{landUse:'upland',cadastralUse:'paddy',growingEnvironment:'unheated_greenhouse'},boundary:{geometry,source:'VWORLD'}});
+ await expect(form).toContainText('Nothing saved.');await page.getByLabel('언어 / Language').selectOption('en');
+ await expect(form.getByLabel('Growing environment',{exact:true})).toHaveValue('unheated_greenhouse');
+ await expect(form).toContainText('A reviewed greenhouse practice is required before planning.');
+ await form.screenshot({path:'.data/verification/field-context-entry.png'});expect(errors).toEqual([]);
+});

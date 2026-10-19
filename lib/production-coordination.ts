@@ -2,7 +2,7 @@ import {z} from 'zod';
 import {cropCodeSchema,type SupportedCropCode} from './crop-registry';
 import {supplySignal,type Range} from './crop-reference';
 
-export const coordinationVersion='production-coordination-v1';
+export const coordinationVersion='production-coordination-v2';
 const day=z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(v=>Number.isFinite(Date.parse(v))&&new Date(v).toISOString().slice(0,10)===v);
 const text=z.string().trim().min(1).max(500);
 const range=z.object({low:z.number().finite().nonnegative(),high:z.number().finite().nonnegative()}).strict().refine(v=>v.low<=v.high);
@@ -11,13 +11,20 @@ export const coordinationPolicySchema=z.object({
  yields:z.array(z.object({crop:cropCodeSchema,commodity:text,kgPer1000m2:range,...evidence}).strict()).max(30),
  targets:z.array(z.object({commodity:text,year:z.number().int().min(2000).max(2200),kg:z.number().positive().finite(),origin:z.enum(['REGISTERED','DEMO']),...evidence}).strict()).max(300),
  specialties:z.array(z.object({centerId:z.string().min(1).max(80),crop:cropCodeSchema,status:z.enum(['ESTABLISHED','DEVELOPMENT_CANDIDATE']),bonus:z.number().min(0).max(5),...evidence}).strict()).max(300),
+ // Reviewed outlook, not a price predictor. Its period must cover the harvest,
+ // not simply the date when the operator happens to plan the crop.
+ marketOutlooks:z.array(z.object({crop:cropCodeSchema,commodity:text,from:day,to:day,pressure:z.enum(['OVERSUPPLY_RISK','BALANCED','SHORTAGE_RISK']),...evidence}).strict()).max(300).optional(),
 }).strict().superRefine((p,ctx)=>{
  for(const [key,values] of [['yields',p.yields.map(v=>v.crop)],['targets',p.targets.map(v=>`${v.commodity}:${v.year}:${v.origin}`)],['specialties',p.specialties.map(v=>`${v.centerId}:${v.crop}`)]] as const)if(new Set(values).size!==values.length)ctx.addIssue({code:'custom',path:[key],message:'기준 중복'});
- for(const values of [p.yields,p.targets,p.specialties])for(const v of values)if(v.checkedOn>v.validUntil)ctx.addIssue({code:'custom',message:'검토일·유효기간 확인 필요'});
+ for(const values of [p.yields,p.targets,p.specialties,p.marketOutlooks??[]])for(const v of values)if(v.checkedOn>v.validUntil)ctx.addIssue({code:'custom',message:'검토일·유효기간 확인 필요'});
+ for(const [i,m] of (p.marketOutlooks??[]).entries()){
+  if(m.from>m.to)ctx.addIssue({code:'custom',path:['marketOutlooks',i],message:'수확 전망 기간 확인 필요'});
+  if(p.marketOutlooks!.slice(0,i).some(o=>o.crop===m.crop&&o.commodity===m.commodity&&o.from<=m.to&&m.from<=o.to))ctx.addIssue({code:'custom',path:['marketOutlooks',i],message:'같은 생산물의 전망 기간이 중복됩니다.'});
+ }
 });
 export type CoordinationPolicy=z.infer<typeof coordinationPolicySchema>;
 export const emptyCoordinationPolicy=():CoordinationPolicy=>({yields:[],targets:[],specialties:[]});
-export type ProductionContribution={id:string;centerId:string;crop:SupportedCropCode;areaM2:number|null;year:number|null;commodity:string|null;kg:Range|null;origin:'REGISTERED'|'DEMO';basis:string};
+export type ProductionContribution={id:string;centerId:string;crop:SupportedCropCode;areaM2:number|null;year:number|null;commodity:string|null;kg:Range|null;origin:'REGISTERED'|'DEMO';basis:string;harvestPeriod?:{from:string;to:string}|null};
 export type ProductionBucket={commodity:string;year:number;origin:'REGISTERED'|'DEMO';kg:Range;cultivations:number};
 export type CoordinationContext={policy:CoordinationPolicy;contributions:ProductionContribution[];centerId:string;today:string;origin:'REGISTERED'|'DEMO'};
 export function aggregateProduction(entries:ProductionContribution[]):ProductionBucket[]{
@@ -31,10 +38,16 @@ export function aggregateProduction(entries:ProductionContribution[]):Production
  }return [...buckets.values()].sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b)));
 }
 const valid=(e:{checkedOn:string;validUntil:string},today:string)=>e.checkedOn<=today&&today<=e.validUntil;
-export function candidateContribution(c:{id:string;centerId:string;crop:SupportedCropCode;areaM2:number|null;harvestYears:number[];origin:'REGISTERED'|'DEMO'},policy:CoordinationPolicy,today:string):ProductionContribution{
+export function candidateContribution(c:{id:string;centerId:string;crop:SupportedCropCode;areaM2:number|null;harvestYears:number[];origin:'REGISTERED'|'DEMO';harvestPeriod?:{from:string;to:string}|null},policy:CoordinationPolicy,today:string):ProductionContribution{
  const years=[...new Set(c.harvestYears)],yieldRef=policy.yields.find(y=>y.crop===c.crop&&valid(y,today));
  const area=c.areaM2&&Number.isFinite(c.areaM2)&&c.areaM2>0?c.areaM2:null;
- return {id:c.id,centerId:c.centerId,crop:c.crop,areaM2:area,origin:c.origin,year:years.length===1?years[0]:null,commodity:yieldRef?.commodity??null,kg:yieldRef&&area?{low:yieldRef.kgPer1000m2.low*area/1000,high:yieldRef.kgPer1000m2.high*area/1000}:null,basis:yieldRef?`${yieldRef.sourceUrl} / ${yieldRef.method}`:'YIELD_REFERENCE_REQUIRED'};
+ return {id:c.id,centerId:c.centerId,crop:c.crop,areaM2:area,origin:c.origin,year:years.length===1?years[0]:null,commodity:yieldRef?.commodity??null,kg:yieldRef&&area?{low:yieldRef.kgPer1000m2.low*area/1000,high:yieldRef.kgPer1000m2.high*area/1000}:null,basis:yieldRef?`${yieldRef.sourceUrl} / ${yieldRef.method}`:'YIELD_REFERENCE_REQUIRED',...(c.harvestPeriod?{harvestPeriod:c.harvestPeriod}:{})};
+}
+export function marketOutlook(c:ProductionContribution,context:CoordinationContext){
+ const rows=(context.policy.marketOutlooks??[]).filter(o=>o.crop===c.crop&&o.commodity===c.commodity&&valid(o,context.today)&&c.harvestPeriod&&o.from<=c.harvestPeriod.from&&o.to>=c.harvestPeriod.to);
+ // A future/expired/partial-period/basis-mismatched source is UNKNOWN, not safe.
+ const ref=rows.length===1?rows[0]:null;
+ return {status:ref?.pressure??'UNKNOWN',scope:'NATIONAL_REFERENCE_ONLY' as const,reference:ref?{sourceUrl:ref.sourceUrl,checkedOn:ref.checkedOn,validUntil:ref.validUntil,from:ref.from,to:ref.to}:null};
 }
 /** Apply only AFTER suitability and complete resource feasibility. Never a price forecast. */
 export function coordinateCandidate(c:ProductionContribution,baseScore:number,context:CoordinationContext){
@@ -45,6 +58,6 @@ export function coordinateCandidate(c:ProductionContribution,baseScore:number,co
  const hasEstablished=specialties.some(s=>s.status==='ESTABLISHED'),specialty=specialties.find(s=>s.crop===c.crop&&(s.status==='ESTABLISHED'||!hasEstablished));
  const bonus=specialty?.bonus??0;
  const rankingScore=Math.round((baseScore+bonus-signal.penalty)*100)/100;
- return {baseScore,score:Math.max(0,Math.min(100,rankingScore)),rankingScore,specialtyBonus:bonus,specialtyStatus:specialty?.status??'NOT_REVIEWED',supply:signal,production:c,registeredTotal:total?.kg??null,coverage:'PARTICIPATING_CULTIVATIONS_ONLY' as const};
+ return {baseScore,score:Math.max(0,Math.min(100,rankingScore)),rankingScore,specialtyBonus:bonus,specialtyStatus:specialty?.status??'NOT_REVIEWED',specialtyReference:specialty?{sourceUrl:specialty.sourceUrl,checkedOn:specialty.checkedOn,validUntil:specialty.validUntil}:null,market:marketOutlook(c,context),supply:signal,production:c,registeredTotal:total?.kg??null,coverage:'PARTICIPATING_CULTIVATIONS_ONLY' as const};
 }
 export type CandidateCoordination=ReturnType<typeof coordinateCandidate>;

@@ -61,8 +61,22 @@
 .sidebar{overflow-y:auto}.sidebar .logo{text-decoration:none;color:inherit}.nav a{align-items:center;color:#bcd0c3;border-radius:10px;text-decoration:none}.nav a.active{background:#dcedc2;color:#244831;font-weight:700}.nav a:hover,.nav button:hover{background:#ffffff12}.nav a.active:hover{background:#dcedc2}.nav-section-label{font-size:11px;color:#a9c1b0;padding:14px 14px 5px;border-top:1px solid #38604b;margin-top:8px}.nav svg{flex-shrink:0}
 @media(max-width:650px){.nav a{padding:10px;font-size:12px;white-space:nowrap}.nav-section-label{display:none}.sidebar{overflow:visible}}
 .replan-manager{min-width:0}
+.automatic-replan-result{display:block;margin:20px 0;padding:20px;border:1px solid #c6dccd;background:#f3f8f3;border-radius:8px;line-height:1.65}
+.automatic-replan-result.is-pending{border-color:#ead6b5;background:#fffbf3}
+.automatic-replan-result h4{font-size:18px;margin:0 0 12px}
+.automatic-replan-result p{font-size:14px;margin:8px 0;overflow-wrap:anywhere}
+.automatic-replan-result article{border-top:1px solid #e6ddcc;padding-top:14px;margin-top:14px}
+.automatic-replan-result>button{margin-top:14px}
+.automatic-replan-result:not(.is-pending)>.table-wrap{max-height:min(38dvh,380px);overflow:auto;overscroll-behavior:contain;scrollbar-gutter:stable}
+.automatic-replan-result .schedule-change-results thead{position:sticky;top:0;z-index:1}
+.task-sheet-replan>.automatic-replan-result:not(.is-pending){display:flex;flex-direction:column;flex:1;min-height:0;margin:0}
+.task-sheet-replan>.automatic-replan-result:not(.is-pending)>.table-wrap{flex:1;min-height:80px;max-height:none}
+.task-sheet-replan>.automatic-replan-result>:is(h4,p,button){flex:none}
+.task-sheet-replan>.automatic-replan-result>button{align-self:flex-start}
+.replan-manager>small.description{display:block;margin-top:10px}
 .work-modal .replan-manager{border:0;box-shadow:none;padding:0;margin-top:0}
 .work-modal .replan-manager>.card-head>button{display:none}
+.schedule-change-fields{align-items:start}.schedule-change-fields label{display:grid;gap:8px;align-content:start}.schedule-change-fields small{font-size:12px;color:var(--muted)}.schedule-change-fields.registration-grid{margin-bottom:20px}.schedule-change-equipment{grid-column:1 / -1;margin:0}
 .replan-inputs{border:0;padding:0;margin:0;min-width:0}
 .replan-replacement{margin:0 0 20px}
 .replan-fields .replan-check{display:flex;align-items:center;gap:8px}
@@ -92,4 +106,88 @@
 @media(max-width:1000px){.replan-options{grid-template-columns:1fr}.replan-option-heading{flex-direction:row;align-items:center;justify-content:space-between}.replan-option-description{min-height:0}.replan-option dl{display:grid;grid-template-columns:1fr 1fr;gap:0 16px}}
 @media(max-width:650px){.replan-manager .replan-fields{grid-template-columns:1fr}.replan-option{padding:12px}.replan-option dl{grid-template-columns:1fr}.replan-manager .table-wrap{overflow-x:auto}.replan-manager.card{padding:12px}}
 
+/* Task management is one stable sheet; only the bordered body scrolls. */
+.work-modal.task-management-modal[open]{display:flex;flex-direction:column;height:816px;overflow:hidden;border-radius:6px;padding:22px;gap:16px}
+.task-management-modal>header.card-head{position:static;flex:none;margin:0;box-shadow:none;min-height:40px}
+.task-management{display:flex;flex-direction:column;flex:1;min-height:0;min-width:0}
+.task-management-title{flex:none;margin:0;padding:16px 20px;border:1px solid #d6dfd3;background:#f4f7f1;font-size:23px;line-height:1.4;overflow-wrap:anywhere}
+.task-management .task-management-tabs{flex:none;display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:0;margin:14px 0 0;border:1px solid #cbd7c8;border-bottom:0}
+.task-management-tabs button{border:0;border-right:1px solid #cbd7c8;border-radius:0;min-height:50px;padding:10px 8px;font:inherit;font-size:14px;line-height:1.4;white-space:normal}
+.task-management-tabs button:last-child{border-right:0}
+.task-management-tabs button[aria-pressed=true]{background:#1d5b40;color:#fff;font-weight:700}
+.task-management-body{flex:1;min-height:0;min-width:0;overflow:auto;overscroll-behavior:contain;scrollbar-gutter:stable;border:1px solid #cbd7c8;padding:20px;background:white}
+.task-management-body :is(.ledger-form,.replan-fields){display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;align-items:start;margin:0 0 20px;padding:0;min-width:0}
+.task-management-body :is(.ledger-form,.replan-fields)>label{display:grid;align-content:start;align-items:start;gap:8px;min-width:0}
+.task-management-body :is(input:not([type=checkbox]),select,textarea){width:100%;min-width:0;max-width:100%;border:1px solid #cbd7c8;border-radius:4px;padding:11px 12px;background:#fff;font:inherit;font-size:14px;color:var(--ink)}
+.task-management-body :is(input:not([type=checkbox]),select){height:46px}
+.task-management-body textarea{min-height:108px;resize:vertical}
+.task-management-body .ledger-form>:is(p,ul,button),.task-management-body .ledger-form>label:has(textarea),.task-management-body .ledger-form>label:has(select),.task-management-body .ledger-form>label:has(input[type=checkbox]){grid-column:1/-1}
+.task-management-body .ledger-form>label:has(input[type=checkbox]){display:flex;align-items:flex-start;line-height:1.6}
+.task-management-body input[type=checkbox]{flex:none;margin-top:2px}
+.task-management-body .ledger-form>button{justify-self:start;min-width:140px;border-radius:4px}
+.task-management-body .ledger-form>ul{margin:0;padding:12px 16px 12px 32px;background:#f5f7f2;border:1px solid #e0e6dc}
+.task-management-body .replan-manager>.card-head{margin:0 0 12px}
+.task-management-body .replan-manager>p{margin:0 0 18px;font-size:14px;color:#637362}
+.task-management-body .replan-manager>button{min-width:140px;border-radius:4px}
+.task-management-body .replan-manager>small{display:block;margin-top:12px}
+.task-management-body .task-sheet-replan{display:flex;flex-direction:column;min-height:378px;height:100%}
+.task-management-body .task-sheet-replan>.replan-fields{flex:none;width:100%}
+.task-management-body .task-sheet-replan>button{align-self:flex-start;margin-top:auto}
+.task-management-body .task-sheet-replan .replan-fields label{grid-template-rows:minmax(40px,auto) 46px auto}
+.task-management-body .work-result-receipt{grid-column:1/-1;padding:18px;border:1px solid #d7e0d4;background:#f6f8f4}
+.task-management-body .work-result-receipt p{margin:8px 0 0}
+.field-duration-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:8px;margin:16px 0}.field-duration-summary p{margin:0;padding:12px;background:#f5f8f2;border:1px solid #d7e0d4}
+.task-management-body>form{height:100%}
+.task-management-body>form>.ledger-form{display:flex;flex-direction:column;height:100%;min-height:378px;margin:0}
+.task-management-body>form>.ledger-form>label{width:100%}
+.task-management-body>form>.ledger-form>button{align-self:flex-start;margin-top:auto}
+.task-management-body>form>.ledger-form>.work-result-receipt{width:100%}
+.task-management-body>p{padding:12px 14px;margin:0;border-bottom:1px solid #dfe6da;font-size:14px;overflow-wrap:anywhere}
+.task-management-body [data-testid=work-order-summary]{gap:0;padding:0;margin:0 0 18px;border-top:1px solid #d6dfd3;border-left:1px solid #d6dfd3}
+.task-management-body [data-testid=work-order-summary]>div{display:grid;grid-template-columns:90px minmax(0,1fr);border-right:1px solid #d6dfd3;border-bottom:1px solid #d6dfd3;min-width:0}
+.task-management-body [data-testid=work-order-summary] dt{padding:12px;background:#f4f7f1;font-size:13px}
+.task-management-body [data-testid=work-order-summary] dd{padding:12px;margin:0;font-size:14px;overflow-wrap:anywhere}
+@media(max-width:700px){
+ .work-modal.task-management-modal[open]{padding:14px;gap:12px}
+ .task-management-title{font-size:20px;padding:12px}
+ .task-management-tabs button{font-size:12px;padding:9px 4px;min-height:56px}
+ .task-management-body{padding:14px}
+ .task-management-body :is(.ledger-form,.replan-fields){grid-template-columns:1fr;gap:14px}
+ .task-management-body [data-testid=work-order-summary]{grid-template-columns:1fr}
+}
 
+
+.workspace-route-frame>.content{min-width:0}
+.workspace-route-frame .document-page button.bg-emerald-800{background:#065f46;color:white;border-color:#065f46}
+.workspace-route-frame .document-page button.bg-emerald-800:hover:not(:disabled){background:#064e3b}
+.field-condition-settings .registration-grid>label{display:grid;gap:6px}
+.field-condition-settings .registration-grid>label:has(input[type=checkbox]){display:flex;align-items:center}
+.field-condition-settings .registration-grid input:not([type=checkbox]),.field-condition-settings .registration-grid select,.field-condition-settings .registration-grid textarea{width:100%;min-width:0}
+@media print{.workspace-route-frame{display:block}.workspace-route-frame>.sidebar,.view-tabs{display:none}}
+.view-tabs button[role=tab][aria-selected=true]{background:#1d5b40;color:white;border-color:#1d5b40}
+.labor-calendar-section{margin-top:0}.labor-calendar-controls{justify-content:flex-end}.labor-calendar-section .labor-calendars{margin-top:12px}.labor-calendar-section .day{min-height:100px;text-align:left;display:flex;flex-direction:column;gap:8px;padding:8px 5px}.labor-calendar-section .day>strong{font-size:14px}.labor-day-counts{display:grid!important;gap:3px;width:100%}.labor-day-counts>span{display:flex;justify-content:space-between;white-space:nowrap;font-size:11px!important}.labor-shortage{background:#fff8eb!important}.labor-shortage .labor-day-counts>span:last-child{color:#a34e19}.labor-filled{background:#eef6eb!important}.labor-panel h2>span{font-size:16px;font-weight:400;margin-left:10px}.labor-simple-form fieldset,.labor-attendance-dialog fieldset{border:0;padding:0;min-width:0}.labor-person-fields{display:grid;grid-template-columns:1fr 1fr;border-top:1px solid #d6dfd0;border-left:1px solid #d6dfd0}.labor-person-fields>label{display:grid;gap:10px;padding:16px;background:#f6f8f3;border-right:1px solid #d6dfd0;border-bottom:1px solid #d6dfd0}.labor-person-fields input,.labor-simple-form td input,.labor-employee-count input,.labor-field-attendance select{width:100%;min-width:0;min-height:44px;border:1px solid #ccd7c7;border-radius:4px;background:white;font:inherit;padding:10px}.labor-dialog-footer{display:flex;gap:10px;margin-top:24px;padding-top:18px;border-top:1px solid #d6dfd0}.labor-employee-count{display:flex;align-items:center;gap:14px;margin-bottom:18px}.labor-employee-count input{width:100px}.labor-day-summary{display:flex;gap:24px;background:#f1f6ec;padding:16px;margin-bottom:18px}.labor-day-fields{display:grid;gap:18px}.labor-field-attendance{border:1px solid #d6dfd0;border-radius:4px}.labor-field-attendance>header{display:flex;align-items:center;justify-content:space-between;gap:16px;background:#f6f8f3;padding:16px}.labor-field-attendance h3{font-size:16px;margin:0 0 8px}.labor-field-attendance td,.labor-field-attendance th{padding:12px 16px}.labor-field-attendance small{display:block;color:#6d7d6b;margin-top:4px}.labor-field-attendance .labor-declined{color:#8b5c4d;background:#faf5f1}.labor-field-attendance select{max-width:160px}.labor-attendance-dialog .table-wrap{margin:0}.labor-panel .card{border-radius:6px}.labor-attendance-dialog .labor-dialog-footer{position:sticky;bottom:0;background:white;padding-bottom:10px}@media(max-width:650px){.labor-person-fields{grid-template-columns:1fr}.labor-field-attendance>header{align-items:flex-start;flex-direction:column}.labor-calendar-section .day{min-height:88px;padding:6px 4px}.labor-day-summary{font-size:14px;gap:16px}}
+.work-modal.field-management-modal[open]{display:flex;flex-direction:column;height:780px;overflow:hidden;border-radius:6px;padding:22px;gap:16px}
+.field-management-modal>header.card-head{position:static;flex:none;margin:0;box-shadow:none}
+.field-management{display:flex;flex-direction:column;flex:1;min-height:0;min-width:0}
+.field-management-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;border:1px solid #cbd7c8;padding:16px 18px;background:#f4f7f1}
+.field-management-heading h3{margin:0;font-size:18px;overflow-wrap:anywhere}.field-management-heading>span{flex:none;font-size:14px}
+.field-management-tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));margin-top:14px;border:1px solid #cbd7c8;border-bottom:0}
+.field-management-tabs button{min-height:48px;padding:10px 8px;border:0;border-right:1px solid #cbd7c8;border-radius:0;background:#fff;color:inherit;font:inherit;font-size:14px}
+.field-management-tabs button:last-child{border-right:0}.field-management-tabs button[aria-selected=true]{background:#1d5b40;color:white;font-weight:700}
+.field-management-body{flex:1;min-height:0;min-width:0;overflow:auto;overscroll-behavior:contain;border:1px solid #cbd7c8;padding:20px}
+.field-management-body .ledger-facts{margin:0}.field-management-body .ledger-facts>div{grid-template-columns:110px minmax(0,1fr)}.field-management-body dd{overflow-wrap:anywhere}
+.field-management-body .field-access-input{display:flex;flex-wrap:wrap;gap:8px}.field-management-body .field-access-input select{width:auto}
+.field-crop-toolbar,.field-crop-cycle-head{display:flex;gap:14px;align-items:end;justify-content:space-between;margin-bottom:20px}.field-crop-toolbar>label{flex:1;display:grid;gap:6px;min-width:0}
+.field-crop-toolbar button,.field-crop-cycle-head button{flex:none}.field-crop-cycle-head{align-items:center;padding:14px;background:#f4f7f1;border:1px solid #d5dfd1;font-size:14px}
+.field-crop-form{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:20px}.field-crop-form>label{display:grid;gap:6px;min-width:0}
+.field-crop-management :is(input:not([type=checkbox]),select,textarea){width:100%;min-width:0;max-width:100%;font:inherit;font-size:14px;border:1px solid #cbd7c8;border-radius:4px;padding:10px 12px}
+.field-crop-management :is(input:not([type=checkbox]),select){min-height:44px}.field-crop-management button{padding:10px 16px;border:1px solid #1d5b40;border-radius:4px;background:#1d5b40;color:white;font:inherit;font-size:14px}
+.field-crop-management button:disabled{opacity:.5;cursor:not-allowed}.field-crop-management details{margin:14px 0}.field-crop-management summary{padding:8px 0}.field-crop-submit{margin-top:20px}
+.field-crop-cycle>details>fieldset{display:grid;grid-template-columns:1fr 1fr;gap:16px}.field-crop-cycle>details>fieldset>label{display:grid;gap:6px}.field-crop-cycle>details>fieldset>details{grid-column:1/-1}.field-crop-cycle>details>fieldset>button{justify-self:start;grid-column:1/-1}
+.field-crop-preview{margin-top:20px;padding-top:12px;border-top:1px solid #d5dfd1}
+.field-season-manager>.field-crop-toolbar{align-items:center;padding:18px;border:1px solid #cbd7c8;background:#f4f7f1}.field-season-manager>.field-crop-toolbar>div{display:grid;gap:8px}.field-season-manager>.field-crop-toolbar strong{font-size:22px}.field-season-selection{padding:18px;border:1px solid #cbd7c8}.field-season-selection>label,.field-season-change>fieldset>label{display:grid;gap:8px}.field-season-change>summary{display:none}.field-season-change>fieldset{display:grid;gap:16px;min-width:0;margin:0;padding:0;border:0}.field-season-change>fieldset>button{justify-self:start}.field-season-selection>button{margin-top:16px}
+@media(max-width:650px){.work-modal.field-management-modal[open]{padding:14px;gap:12px}.field-management-heading{flex-direction:column;align-items:start;gap:8px}.field-management-heading h3{font-size:16px}.field-management-body{padding:14px}.field-crop-form,.field-crop-cycle>details>fieldset{grid-template-columns:1fr}.field-crop-toolbar,.field-crop-cycle-head{flex-wrap:wrap}.field-management-tabs button{font-size:12px;padding:8px 2px}}
+.schedule-change-results del,.schedule-change-results strong{display:block}.schedule-change-results del{color:#77837b;font-size:12px}.schedule-change-results td{vertical-align:top}.schedule-change-results small{display:block;margin-top:4px}.schedule-change-results strong{font-weight:600}
+.personal-settings-menu{display:grid;gap:12px;max-width:760px}.personal-settings-menu>button{display:flex;justify-content:space-between;align-items:center;min-height:76px;padding:22px 24px;border:1px solid #d4decd;border-radius:5px;background:white;color:#173e32;font:inherit;font-weight:600;text-align:left}.personal-settings-menu>button:hover{background:#f0f5eb}.personal-profile fieldset{border:0;padding:0;margin:0}.personal-profile-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-bottom:24px}.personal-profile label{display:grid;gap:8px}.personal-profile input{min-width:0;width:100%;padding:12px;border:1px solid #ccd7c7;border-radius:4px;font:inherit}.personal-profile input[readonly]{background:#f4f6f1;color:#637167}.personal-profile button,.recovery-request button{padding:12px 20px;border:1px solid #18553e;border-radius:4px;background:#18553e;color:white;font:inherit}.personal-profile button:disabled,.recovery-request button:disabled{opacity:.5}@media(max-width:600px){.personal-profile-grid{grid-template-columns:1fr}}
+[data-testid=sms-management] td small{display:block;margin-top:4px}.sms-policies{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:16px 0}.sms-policies>div{border:1px solid #d4decd;padding:16px;background:#f6f8f2}.sms-policies p{margin:8px 0 0}.sms-detail .sms-body{white-space:pre-wrap;border:1px solid #d4decd;padding:20px;background:#f6f8f2;line-height:1.8}.sms-detail dl{display:grid;grid-template-columns:100px 1fr;gap:12px}.sms-detail dd{margin:0;overflow-wrap:anywhere}@media(max-width:680px){.sms-policies{grid-template-columns:1fr}.sms-detail dl{grid-template-columns:80px 1fr}}
+.labor-calendar-section .day .labor-day-counts,.labor-calendar-section .day .labor-day-counts>span{margin:0;padding:0;border:0;border-radius:0;background:none}.labor-calendar-section .day .labor-day-counts{margin-top:auto;gap:6px}.labor-calendar-section .day .labor-day-counts>span{font-size:12px!important;line-height:1.5}.labor-calendar-controls>button{padding:8px 12px;border:1px solid #d6dfd0;border-radius:4px;background:white;font:inherit;font-size:13px}.labor-calendar-section .day{min-height:96px}.labor-panel [data-testid=casual-workers] table{min-width:660px}@media(max-width:650px){.labor-calendar-section .day{min-height:82px}.labor-calendar-section .day .labor-day-counts>span{font-size:10px!important}.labor-calendar-controls{gap:5px}.labor-calendar-controls>button{padding:8px}}

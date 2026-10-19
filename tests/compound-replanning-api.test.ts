@@ -57,8 +57,11 @@ it('persists combined failure and absence, preserves lender work, confirms both 
   const helper={...fixture.worker,id:randomUUID(),name:'홍지원'};
   await db.workRecord.update({where:{workspace_kind_id:{workspace:recordSpace('janggye'),kind:'laborOperations',id:'current'}},data:{payload:json({...emptyLaborOps(),people:[helper]})}});
   const editLabor=async(body:object)=>call(labor,'labor-operations',receiver,{...body,version:(await call(laborGet,'labor-operations',receiver)).version,requestId:randomUUID()});
+  // The fixture changes the seeded operation's equipment, label and duration
+  // directly. Reconcile its generated recruitment before accepting responses.
+  await editLabor({action:'sync'});
   await editLabor({action:'open',demandId:mId,pay:'격리된 근무 조건',simpleWorkConfirmed:true});
-  const job=(await call(laborGet,'labor-operations',receiver)).payload.jobs[0];
+  const job=(await call(laborGet,'labor-operations',receiver)).payload.jobs.find((j:any)=>j.missionId===mId&&j.status==='OPEN');
   await editLabor({action:'response',jobId:job.id,workerId:fixture.worker.id,response:'PHONE'});
   await editLabor({action:'absence',jobId:job.id,workerId:fixture.worker.id,reason:'당일 불참 확인'});
   expect((await call(recoveryGet,'labor-recovery',receiver)).issues[0].status).toBe('OPEN');

@@ -61,3 +61,9 @@ it('different state, arrival, loan and weather produce a different snapshot',()=
  s.machines[0].availableFrom='2026-10-01';expect(decisionSnapshot(s,weather,asOf)).not.toBe(id);
  expect(decisionSnapshot(state(),{...weather,status:'READY'},asOf)).not.toBe(id);
 });
+it.each(['TIME_LIMIT','SIZE_LIMIT','INVALID'])('keeps unfinished search out of infeasible evidence: %s',async failureKind=>{
+ vi.stubGlobal('fetch',vi.fn(async()=>Response.json({status:'NO_FEASIBLE_PLAN',failureKind,reason:'계산 미완료',contractVersion:'shared-schedule-v1',capacityPoolsVersion:'qualified-pools-v1',operatorVersion:'named-operators-v1',laborCapacityVersion:'confirmed-labor-v1',resourceDayVersion:'exclusive-center-days-v1'})));
+ const result=await compareReplanAlternatives(state(),{ids:['selected']},[{id:'one',label:'one'}],weather,asOf);
+ expect(result.results[0]).toMatchObject({status:'BLOCKED',metrics:null,previewRequest:null,result:{failureKind}});
+ expect(result.nonDominatedIds).toEqual([]);
+});

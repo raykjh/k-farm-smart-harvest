@@ -3,6 +3,7 @@ import type {State,Mission} from './types';
 import {recordSpace} from './workspace';
 import {isClosedTask} from './task-lifecycle';
 import {emptyLaborOps,type LaborOps,type LaborJob} from './labor-operations';
+import {confirmedAttendanceCount} from './labor-attendance-review';
 import type {LaborShare} from './labor-sharing';
 
 export type LaborRecovery={id:string;kind:'LOCAL_ABSENCE'|'SHARE_WITHDRAWAL'|'WINDOW_WITHDRAWAL';centerId:string;ownerCenterId:string;workerId:string;workerName:string;reason:string;actor:string;recordedAt:string;windowId?:string;jobId?:string;date:string;startMinute:number;endMinute:number;tasks:{id:string;signature:string}[];status:'OPEN'|'RESOLVED';resolution?:'REPLACED'|'REPLANNED'|'CLOSED';resolvedAt?:string};
@@ -28,7 +29,7 @@ export async function refreshLaborRecoveries(tx:Prisma.TransactionClient,centerI
  for(const r of rows){const issue=r.payload as unknown as LaborRecovery;if(issue.status!=='OPEN')continue;
   const current=issue.tasks.flatMap(t=>{affected.add(t.id);const m=state.missions.find(m=>m.id===t.id);return m&&!isClosedTask(m.status)?[{m,original:t}]:[]});
   const same=current.filter(({m,original})=>signature(m)===original.signature);
-  const staffed=(m:Mission)=>{const j=ops.jobs.find(j=>j.missionId===m.id&&j.status==='OPEN');return !!j&&j.assigned.length+shares.filter(s=>s.borrowerCenterId===centerId&&s.jobId===j.id&&s.sourceHash===j.sourceHash&&s.status==='ASSIGNED').length>=j.count};
+  const staffed=(m:Mission)=>{const j=ops.jobs.find(j=>j.missionId===m.id&&j.status==='OPEN');return !!j&&confirmedAttendanceCount({...j,borrowedNames:[]})+shares.filter(s=>s.borrowerCenterId===centerId&&s.jobId===j.id&&s.sourceHash===j.sourceHash&&s.status==='ASSIGNED').length>=j.count};
   const replaced=issue.kind!=='WINDOW_WITHDRAWAL'&&same.every(({m})=>staffed(m));
   if(!current.length||!same.length||replaced){
    issue.status='RESOLVED';issue.resolution=!current.length?'CLOSED':!same.length?'REPLANNED':'REPLACED';issue.resolvedAt=new Date().toISOString();
@@ -37,7 +38,7 @@ export async function refreshLaborRecoveries(tx:Prisma.TransactionClient,centerI
    for(const {m} of same)blocked.add(m.id);
    const farmers=new Set(same.flatMap(({m})=>state.fields.filter(f=>f.id===m.fieldId).map(f=>f.farmerId)));
    for(const farmerId of farmers){const id=`labor-recovery:${issue.id}:${farmerId}`;
-    if(!await tx.outbox.findUnique({where:{id}}))await tx.outbox.create({data:{id,centerId,farmerId,planVersion:state.planVersion,body:'작업 인력 변동으로 대체 인력과 일정을 확인 중입니다. 변경계획 확정 후 안내합니다.'}});
+    if(!await tx.outbox.findUnique({where:{id}}))await tx.outbox.create({data:{status:'RECORDED_ONLY',id,centerId,farmerId,planVersion:state.planVersion,body:'작업 인력 변동으로 대체 인력과 일정을 확인 중입니다. 변경계획 확정 후 안내합니다.'}});
    }
   }
  }

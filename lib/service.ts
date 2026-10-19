@@ -4,7 +4,7 @@ import {actorLabel} from './auth';
 import {randomUUID} from 'node:crypto';
 import {Prisma} from '@prisma/client';
 import {db} from './db';
-import {initialState,annualMissions} from './seed';
+import {annualMissions} from './seed';
 import {snapshot,solve,validate,jobs} from './scheduler';
 import {propose} from './ai';
 import {recommend} from './recommend';
@@ -14,7 +14,7 @@ import {slotLabel,type State,type Crop,type Mode,type Revision} from './types';
 export class Conflict extends Error {}
 const json=(v:unknown)=>v as Prisma.InputJsonValue;
 export async function read(){
- const c=await db.center.findUnique({where:{id:centerId()}});if(!c)throw new Error('pnpm seed를 먼저 실행하세요.');
+ const c=await db.center.findUnique({where:{id:centerId()}});if(!c)throw new Error('소속 센터가 아직 준비되지 않았습니다. 센터 초기 설정을 확인하세요.');
  const notices=await db.outbox.findMany({where:{centerId:centerId()},orderBy:{createdAt:'desc'}});
  const state=c.state as unknown as State;
  return {state,production:readProduction(state),notices,aiMode:process.env.AI_MODE==='nebius'?'NEBIUS':'DEMO_RULES'};
@@ -33,6 +33,8 @@ async function mutate(operation:string,key:string,fn:(s:State,tx:Tx)=>Promise<un
   return result;
  },{timeout:20000});
 }
+// Retained for isolated historical contract fixtures only. Public routes do not
+// expose these prototype mutations; ordinary registration and planning are separate.
 export async function register(key:string,fieldId:string,area:number,access:boolean,water:boolean,confirmed:boolean){
  return mutate(`register:${fieldId}:${area}:${access}:${water}:${confirmed}`,key,async s=>{
   if(s.planned)throw new Conflict('확정된 계획의 농지 변경은 새 계획이 필요합니다.');
@@ -91,7 +93,7 @@ export async function approve(key:string,id:string){return mutate(`approve:${id}
  await tx.outbox.updateMany({where:{centerId:centerId(),status:{in:['PENDING','FAILED']}},data:{status:'SUPERSEDED'}});
  const fieldIds=[...new Set(r.diff.map(d=>s.missions.find(m=>m.id===d.missionId)!.fieldId))];
  for(const fid of fieldIds){const f=s.fields.find(f=>f.id===fid)!;const d=r.diff.find(d=>s.missions.find(m=>m.id===d.missionId)!.fieldId===fid)!;
-  await tx.outbox.create({data:{id:`${centerId()}:${s.planVersion}:${f.farmerId}`,centerId:centerId(),farmerId:f.farmerId,planVersion:s.planVersion,body:`[모의 알림] ${f.name} 작업 일정이 ${slotLabel(d.after)}로 변경되었습니다. 센터가 장비·인력을 배정합니다. 직접 장비에 접근하지 마세요. 문의는 지원센터로 연락해 주세요.`}});
+  await tx.outbox.create({data:{status:'RECORDED_ONLY',id:`${centerId()}:${s.planVersion}:${f.farmerId}`,centerId:centerId(),farmerId:f.farmerId,planVersion:s.planVersion,body:`[모의 알림] ${f.name} 작업 일정이 ${slotLabel(d.after)}로 변경되었습니다. 센터가 장비·인력을 배정합니다. 직접 장비에 접근하지 마세요. 문의는 지원센터로 연락해 주세요.`}});
  }
  return {planVersion:s.planVersion,notifications:fieldIds.length};
 });}
@@ -100,13 +102,12 @@ export async function lock(key:string,machineId:string){return mutate(`lock:${ma
  for(const job of s.missions)if(job.resourceId===machineId&&!isClosedTask(job.status))job.status='HELD';
  return {machineId,safetyLock:true};
 });}
-export async function deliver(failFirst=false){
- // Mock provider + local delivery receipt in one DB transaction. Real provider needs its own idempotent receipt reconciliation.
+export async function deliver(_failFirst=false){
+ // Owner messages have been retired. Preserve records without sending, including
+ // callers using the old endpoint. Workforce delivery uses sms-store exclusively.
  return db.$transaction(async tx=>{
   await tx.$queryRaw`SELECT id FROM "Center" WHERE id = ${centerId()} FOR UPDATE`;
-  const rows=await tx.outbox.findMany({where:{centerId:centerId(),status:{in:['PENDING','FAILED']},attempts:{lt:3},availableAt:{lte:new Date()}}});
-  let delivered=0;
-  for(const n of rows){const fail=failFirst&&n.attempts===0;await tx.outbox.update({where:{id:n.id},data:{status:fail?'FAILED':'DELIVERED',attempts:{increment:1},sentAt:fail?null:new Date(),availableAt:new Date(Date.now()+(fail?2000:0))}});if(!fail)delivered++;}
-  return {delivered,attempted:rows.length,provider:'MOCK_SMS'};
+  await tx.outbox.updateMany({where:{centerId:centerId(),status:{in:['PENDING','FAILED']}},data:{status:'RECORDED_ONLY'}});
+  return {delivered:0,attempted:0,provider:'OWNER_SMS_DISABLED'};
  });
 }

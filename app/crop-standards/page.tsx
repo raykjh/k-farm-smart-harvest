@@ -1,2 +1,3 @@
 import RegionalCropStandards from '@/components/regional-crop-standards';
-export default function Page(){return <RegionalCropStandards/>;}
+import WorkspaceRouteFrame from '@/components/workspace-route-frame';
+export default function Page(){return <WorkspaceRouteFrame active="crop-info"><RegionalCropStandards/></WorkspaceRouteFrame>;}

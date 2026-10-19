@@ -2,6 +2,7 @@
 import {cropDisplayNames,type SupportedCropCode} from '@/lib/crop-registry';
 import {PUBLIC_CRITERIA_CHECKED_ON,publicCriteriaCoverage,publicRegionalCriteria,publicYieldCriteria} from '@/lib/public-crop-criteria';
 import {useLanguage} from './language';
+import {operationalText} from '@/lib/operational-i18n';
 import {Button} from './ui/button';
 
 export default function PublicCriteriaReview({global,canManage,centerId,centers,onYield,onRegion}:{
@@ -13,7 +14,7 @@ export default function PublicCriteriaReview({global,canManage,centerId,centers,
  return <details className="section-space" data-testid="public-criteria"><summary>{t('공개 기준자료','Public reference data')} · {publicYieldCriteria.length} / {publicCriteriaCoverage.length} {t('작물 단수 확인','crop yields checked')}</summary>
  <p>{t('자료는 열람·입력 보조용입니다. 계산에는 유효기간을 지정해 저장한 기준만 사용합니다. 아래 범위는 과거 전국 연평균 단수의 최솟값~최댓값이며 농지별 예측 신뢰구간이 아닙니다.','These sources support review and data entry. Only saved, unexpired criteria enter calculations. Ranges are historical national annual means, not field prediction intervals.')}</p>
  <div className="table-wrap" role="region" aria-label={t('공개 단수 자료표','Public yield reference table')} tabIndex={0}><table style={{minWidth:800}}><thead><tr>{[t('작물 · 생산물 기준','Crop / commodity'),t('통계연도','Statistical years'),t('kg / 1,000 m²','kg / 1,000 m²'),t('적용 조건 · 출처','Conditions / source'),t('검토','Review')].map(h=><th key={h}>{h}</th>)}</tr></thead><tbody>{publicYieldCriteria.map(r=><tr key={r.id}>
- <td>{names[r.crop]}<br/><small>{r.basis[ko?0:1]}</small></td><td>{r.years[0]}–{r.years.at(-1)}</td><td>{r.kgPer1000m2.low.toLocaleString()}–{r.kgPer1000m2.high.toLocaleString()}</td><td>{r.qualification[ko?0:1]}<br/><a href={r.sourceUrl} target="_blank" rel="noreferrer">{t('공식 통계','Official statistics')}</a> · {r.publishedOn}<br/><small>{r.locator}</small></td>
+ <td>{names[r.crop]}<br/><small>{r.basis[ko?0:1]}</small></td><td>{r.years[0]}–{r.years.at(-1)}</td><td>{r.kgPer1000m2.low.toLocaleString()}–{r.kgPer1000m2.high.toLocaleString()}</td><td>{r.qualification[ko?0:1]}<br/><a href={r.sourceUrl} target="_blank" rel="noreferrer">{t('공식 통계','Official statistics')}</a> · {r.publishedOn}<br/><small>{operationalText(r.locator,locale)}</small></td>
  <td>{canManage&&global?<Button size="sm" variant="outline" onClick={()=>onYield(r.id)}>{names[r.crop]} {t('기준 불러오기','load reference')}</Button>:t('총괄 검토 후 적용','Global review required')}</td>
  </tr>)}</tbody></table></div>
  <p>{t('단수 미수집','Yield not yet collected')}: {publicCriteriaCoverage.filter(r=>r.yield==='NOT_COLLECTED').map(r=>names[r.crop]).join(', ')}</p>

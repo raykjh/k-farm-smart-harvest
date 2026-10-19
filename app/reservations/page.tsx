@@ -1,2 +1,4 @@
 import Reservations from '@/components/reservations';
-export default function Page(){return <Reservations/>}
+import WorkspaceRouteFrame from '@/components/workspace-route-frame';
+// Retain the legacy URL, including the global administrator's read scope.
+export default function Page(){return <WorkspaceRouteFrame active="장비"><Reservations/></WorkspaceRouteFrame>}

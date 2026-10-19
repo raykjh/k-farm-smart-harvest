@@ -19,4 +19,15 @@ describe('stored crop reference and conservative concentration policy',()=>{
  it('below-reference is explicitly not proof of national balance',()=>{expect(supplySignal({low:100,high:200},ref.commodity,{year:2027},threshold,now).reason).toBe('NOT_PROOF_OF_NATIONAL_BALANCE')});
  it('pins stored baseline versions; changing data does not mutate approved plans',()=>{const s=initialState();s.productionLedger=syncProduction(s);const id=Object.keys(s.productionLedger.entries)[0];s.productionLedger.entries[id].referenceVersion='older-pinned';const before=JSON.stringify(s);expect(syncProduction(s).entries[id].referenceVersion).toBe('older-pinned');expect(JSON.stringify(s)).toBe(before)});
  it('caches legacy reads and removes unsupported supply points',()=>{const s=initialState();expect(readProduction(s)).toBe(readProduction(s));expect(s.productionLedger).toBeUndefined();expect(recommend(s.fields[0]).every(r=>r.parts.supply===0)).toBe(true)});
+ it('keeps extended-crop fields readable without inventing a missing yield reference',()=>{
+  const s=initialState();s.fields=s.fields.slice(0,2).map((f,i)=>({...f,crop:i===0?'보리':'쌀'}));const before=structuredClone(s);
+  const ledger=readProduction(s);
+  expect(ledger.entries[s.fields[0].id]).toBeUndefined();
+  expect(Object.keys(ledger.entries)).toHaveLength(s.fields.length-1);expect(s).toEqual(before);
+ });
+ it('removes a previous crop contribution when the replacement has no comparable reference',()=>{
+  const s=initialState();s.fields=[{...s.fields[0],crop:'쌀'}];s.productionLedger=syncProduction(s);const f=s.fields[0],previous=s.productionLedger.entries[f.id];
+  f.crop='보리';const before=structuredClone(s),ledger=syncProduction(s);
+  expect(ledger.entries[f.id]).toBeUndefined();expect(ledger.totals[bucketKey(previous)]).toEqual({low:0,high:0});expect(s).toEqual(before);
+ });
 });

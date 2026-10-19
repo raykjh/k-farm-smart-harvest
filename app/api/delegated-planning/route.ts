@@ -16,7 +16,6 @@ import {SCHEDULING_ENGINE_VERSION} from '@/lib/scheduling-engine';
 import {dispatchPlacementKey} from '@/lib/annual-dispatch';
 const json=(v:unknown)=>JSON.parse(JSON.stringify(v)) as Prisma.InputJsonValue;
 const hash=(v:unknown)=>createHash('sha256').update(JSON.stringify({engine:SCHEDULING_ENGINE_VERSION,value:v})).digest('hex');
-const local=(r:NextRequest)=>['localhost:3100','127.0.0.1:3100'].includes(r.headers.get('host')??'')&&(!r.headers.get('origin')||['http://localhost:3100','http://127.0.0.1:3100'].includes(r.headers.get('origin')!));
 const key=(kind:string,id='current')=>({where:{workspace_kind_id:{workspace:recordSpace(),kind,id}}});
 const today=()=>new Date(Date.now()+9*3600000).toISOString().slice(0,10);
 async function snapshot(tx:Prisma.TransactionClient){
@@ -33,9 +32,8 @@ async function calculate(s:Awaited<ReturnType<typeof snapshot>>,idFor:(pnu:strin
  const p=(await delegatedProposal(s.fields.filter(f=>!missing.includes(f)),s.version,s.state,s.cycles,validateSettings(s.settings),idFor,s.today,names));
  p.pending.push(...missing.map(f=>({pnu:f.pnu,address:f.address,reason:'상담의 위임·정보 이용 설명 기록 확인 필요'})));return p;
 }
-async function handleGET(req:NextRequest){if(!local(req))return NextResponse.json({error:'출처 거부'},{status:403});try{const row=await db.workRecord.findUnique(key('delegatedSettings'));return NextResponse.json({settings:row?.payload??null},{headers:{'Cache-Control':'no-store'}})}catch{return NextResponse.json({error:'공통 기준 조회 실패'},{status:503})}}
+async function handleGET(req:NextRequest){try{const row=await db.workRecord.findUnique(key('delegatedSettings'));return NextResponse.json({settings:row?.payload??null},{headers:{'Cache-Control':'no-store'}})}catch{return NextResponse.json({error:'공통 기준 조회 실패'},{status:503})}}
 async function handlePOST(req:NextRequest){
- if(!local(req))return NextResponse.json({error:'출처 거부'},{status:403});
  try{
  const raw=await req.text();if(raw.length>150000)throw Error('입력 크기 초과');const b=JSON.parse(raw);
  if(b.action==='settings'){

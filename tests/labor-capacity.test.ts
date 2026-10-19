@@ -41,12 +41,13 @@ it('respects the same confirmed support in real solver calls for initial and rep
 });
 
 it('persists support identity through initial dispatch and carries it into the common replan engine',async()=>{
- const w=supportWindow(),s=state(w);
+ // A new manual booking needs a half-day plus travel at both ends.
+ const w={...supportWindow(),endMinute:780},s=state(w);
  // Only fixture inputs: the real initial adapter, plan append and replan engine run.
  const plan={year:2032,plots:[{pnu:'5274036023110930000',area:1000,crop:'pepper',mode:'full',consultationId:'fixture-farmer',address:'격리 테스트 필지',tasks:[{id:'fixture-harvest',name:'고추 수확',operationCode:'harvest',operationKey:'fixture:harvest',predecessorKeys:[],kind:'PROCESS',window:{from:date,to:date},requirements:{owner:'센터 인력',staff:1,transport:0,machineCode:null,laborMinutesPer1000m2:60,setupMinutes:0,requiresOperator:false,rainSensitive:false}}]}]} as unknown as AnnualPlan;
  const dispatched=await previewAnnualDispatch(plan,s,'2032-08-31');
  const compared=await compareCropAlternatives([{id:'crop',plan}],s,'2032-08-31',[{id:'local',candidateId:'crop',resourceScope:'LOCAL_ONLY'},{id:'shared',candidateId:'crop',resourceScope:'CONFIRMED_SHARED'}]);
- expect(compared.results[0].status).toBe('INCOMPLETE');expect(compared.results[1].status).toBe('CAPACITY_FEASIBLE');expect(compared.results[1].metrics.sharedWorkerMinutes).toBe(60);
+ expect(compared.results[0].status).toBe('INCOMPLETE');expect(compared.results[1].status).toBe('CAPACITY_FEASIBLE');expect(compared.results[1].metrics.sharedWorkerMinutes).toBe(240);
  expect(dispatched.assignments).toHaveLength(1);expect(dispatched.assignments[0].laborSupportIds).toEqual([w.id]);
  const stored=appendAssignments(s,plan,dispatched);expect(stored.missions[0].laborSupportIds).toEqual([w.id]);
  const replanned=await calculateAnnualReplan(stored,{ids:['fixture-harvest'],scope:'PRESERVE'}, {status:'NOT_CONFIGURED',points:[]} as any,'2032-08-31');

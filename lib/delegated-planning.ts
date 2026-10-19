@@ -20,7 +20,8 @@ export function validateSettings(raw:unknown):DelegatedSettings{
  return v;
 }
 export type Dispatch=Awaited<ReturnType<typeof previewAnnualDispatch>>;
-export async function delegatedProposal(fields:FieldEntry[],version:number,state:State,existing:Cultivation[],settings:DelegatedSettings,idFor:(pnu:string)=>string,today:string,names:Record<string,string>={},options:{crops?:SupportedCropCode[];preserveOrder?:boolean}={}){
+export async function delegatedProposal(fields:FieldEntry[],version:number,state:State,existing:Cultivation[],settings:DelegatedSettings,idFor:(pnu:string)=>string,today:string,names:Record<string,string>={},options:{crops?:SupportedCropCode[];preserveOrder?:boolean;includeUnassigned?:boolean}={}){
+ existing=existing.filter(c=>!c.closedAt);
  let reserved=structuredClone(state);
  const plans:{cultivation:Cultivation;plan:AnnualPlan;dispatch:Dispatch;score:number}[]=[],pending:{pnu:string;address:string;reason:string}[]=[];
  const comparisons:{pnu:string;address:string;crop:string;score:number;status:'CAPACITY_FEASIBLE'|'INCOMPLETE'|'BLOCKED';assigned:number;reasons:string[];selected:boolean;resourceAlternatives?:{scope:string;status:string;metrics:Awaited<ReturnType<typeof compareCropAlternatives>>['results'][number]['metrics']}[]}[]=[];
@@ -48,7 +49,7 @@ export async function delegatedProposal(fields:FieldEntry[],version:number,state
    const missing=[...new Set(dispatch.pending.map(p=>p.reason))];
    comparisons.push({pnu:f.pnu,address:f.address,crop:c.crop,score:c.score!,status:dispatch.feasibility.length>0&&dispatch.feasibility.every(x=>x.status==='CAPACITY_FEASIBLE')?'CAPACITY_FEASIBLE':'INCOMPLETE',assigned:dispatch.assignments.length,reasons:missing,selected:false,resourceAlternatives:resourceComparison.results.map(r=>({scope:r.resourceScope,status:r.status,metrics:r.metrics}))});
    reasons.push(c.crop+': '+missing.join(', '));
-   if(dispatch.assignments.length)evaluated.push({cultivation,plan,dispatch,score:c.score!});
+   if(dispatch.assignments.length||options.includeUnassigned)evaluated.push({cultivation,plan,dispatch,score:c.score!});
   }catch(e){const reason=e instanceof Error?e.message:'기준 확인 필요';reasons.push(c.crop+': '+reason);comparisons.push({pnu:f.pnu,address:f.address,crop:c.crop,score:c.score!,status:'BLOCKED',assigned:0,reasons:[reason],selected:false});}}
   // Evaluate alternatives against the same prior reservations, then reserve only the winner.
   evaluated.sort((a,b)=>Number(b.dispatch.feasibility.every(x=>x.status==='CAPACITY_FEASIBLE'))-Number(a.dispatch.feasibility.every(x=>x.status==='CAPACITY_FEASIBLE'))||b.score-a.score);

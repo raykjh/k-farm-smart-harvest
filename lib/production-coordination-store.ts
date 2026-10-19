@@ -6,6 +6,11 @@ import {recordSpace} from './workspace';
 import {coordinationPolicySchema,emptyCoordinationPolicy,candidateContribution,aggregateProduction,type ProductionContribution} from './production-coordination';
 export const coordinationPolicyKey={workspace:'shared',kind:'productionCoordinationPolicy',id:'current'};
 export function harvestYears(plan:AnnualPlan){return [...new Set(plan.plots.flatMap(p=>p.tasks.filter(t=>t.operationCode==='harvest').flatMap(t=>t.window?[Number(t.window.from.slice(0,4)),Number(t.window.to.slice(0,4))]:[])))];}
+export function harvestPeriod(plan:AnnualPlan){
+ const tasks=plan.plots.flatMap(p=>p.tasks.filter(t=>t.operationCode==='harvest'));
+ if(!tasks.length||tasks.some(t=>!t.window))return null;
+ return {from:tasks.map(t=>t.window!.from).sort()[0],to:tasks.map(t=>t.window!.to).sort().at(-1)!};
+}
 /** Cross-center output contains aggregate crop quantities, never farmer contacts. */
 export async function readProductionCoordination(tx:Prisma.TransactionClient,centerId:string,today:string){
  const policyRow=await tx.workRecord.findUnique({where:{workspace_kind_id:coordinationPolicyKey}}),policy=coordinationPolicySchema.parse(policyRow?.payload??emptyCoordinationPolicy());
@@ -14,9 +19,10 @@ export async function readProductionCoordination(tx:Prisma.TransactionClient,cen
  const entries:ProductionContribution[]=[];
  for(const row of rows.filter(r=>r.kind==='cultivation')){
   const cycle=row.payload as unknown as Cultivation,plan=plans.get(row.workspace+':'+row.id);
+  if(cycle.closedAt)continue;
   const owner=centerRegistry.find(c=>recordSpace(c.id)===row.workspace)!.id,plot=plan?.plots?.find(p=>p.pnu===cycle.pnu);
   const origin=plan?.context?.catalog?'DEMO':'REGISTERED';
-  const entry=candidateContribution({id:row.workspace+':'+cycle.id,centerId:owner,crop:cycle.crop,areaM2:plot?.area??null,harvestYears:plan?harvestYears(plan):[],origin},policy,today);
+  const entry=candidateContribution({id:row.workspace+':'+cycle.id,centerId:owner,crop:cycle.crop,areaM2:plot?.area??null,harvestYears:plan?harvestYears(plan):[],harvestPeriod:plan?harvestPeriod(plan):null,origin},policy,today);
   entries.push(entry);
  }
  return {policy,policyVersion:policyRow?.version??0,contributions:entries,centerId,today,origin:'REGISTERED' as const,totals:aggregateProduction(entries),unquantified:entries.filter(e=>!e.kg||!e.commodity||e.year===null).length,coverage:'PARTICIPATING_CULTIVATIONS_ONLY' as const};

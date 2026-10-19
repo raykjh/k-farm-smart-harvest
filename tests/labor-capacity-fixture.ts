@@ -5,7 +5,7 @@ import {recordSpace} from '../lib/workspace';
 import {emptyLaborOps,type Worker} from '../lib/labor-operations';
 import type {LaborCapacityWindow} from '../lib/labor-capacity';
 const json=(v:unknown)=>JSON.parse(JSON.stringify(v));
-const kinds=['laborRecovery','laborCapacityWindow','laborCapacityNotice','laborCapacityReceipt','laborOperations','laborOperationReceipt','laborShare','laborShareReceipt','laborShareNotice','centerGeography','centerSettings','equipmentLoan','equipmentSharingOffer','resourceReservation','laborDemand','replanning','taskPlanChange'];
+const kinds=['smsMessage','smsAttempt','laborPolicy','automaticReplan','centerResourceNotice','laborRecovery','laborCapacityWindow','laborCapacityNotice','laborCapacityReceipt','laborOperations','laborOperationReceipt','laborShare','laborShareReceipt','laborShareNotice','centerGeography','centerSettings','equipmentLoan','equipmentSharingOffer','resourceReservation','laborDemand','replanning','planningDecision','taskPlanChange'];
 export async function laborCapacityFixture(){
  if(!process.env.DATABASE_URL?.endsWith('/kfarm_test'))throw Error('isolated test DB required');
  const centers=await db.center.findMany(),records=await db.workRecord.findMany({where:{kind:{in:kinds}}}),audit=await db.audit.findMany({select:{id:true}}),outbox=await db.outbox.findMany({select:{id:true}});

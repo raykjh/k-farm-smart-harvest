@@ -84,7 +84,7 @@ export function verifySchedule(c:SchedulingContract,assignments:SchedulingAssign
 
 export type ScheduleResult=
  |{status:'FEASIBLE';contractVersion:string;phase:string;assignments:SchedulingAssignment[];optimal:boolean;unassigned?:string[];components?:number;largestComponent?:number}
- |{status:'NO_FEASIBLE_PLAN';contractVersion:string;reason:string;components?:number;largestComponent?:number};
+ |{status:'NO_FEASIBLE_PLAN';contractVersion:string;reason:string;failureKind?:'INFEASIBLE'|'TIME_LIMIT'|'SIZE_LIMIT'|'INVALID';components?:number;largestComponent?:number};
 export async function solveSchedule(contract:SchedulingContract):Promise<ScheduleResult>{
  const response=await fetch((process.env.SOLVER_URL??'http://127.0.0.1:8100')+'/schedule',{
   method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(contract),signal:AbortSignal.timeout(contract.tasks.length>600?45000:14000),

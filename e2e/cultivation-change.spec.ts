@@ -26,6 +26,6 @@ test('approved-plan change requires review evidence and confirms once in UI',asy
  await page.goto('/register');await page.getByText('재배 건 관리',{exact:false}).click();await page.getByText('농지·작물 변경안',{exact:true}).click();
  await page.getByLabel('변경 면적 (㎡)').fill('1200');await page.getByRole('button',{name:'변경 영향·재계획 계산'}).click();
  const approve=page.getByRole('button',{name:'변경계획 일괄 승인',exact:true});await expect(approve).toBeDisabled();
- await page.getByLabel('비용 검토 기록').fill('추가 실비 검토');await expect(approve).toBeDisabled();await page.getByLabel('농부 동의·위임 근거').fill('농부 변경 동의 확인');
+ await page.getByLabel('비용 검토 기록').fill('추가 실비 검토');await expect(approve).toBeDisabled();await page.getByLabel('소유주 동의·위임 근거').fill('농부 변경 동의 확인');
  page.on('dialog',d=>d.accept());await approve.click();await expect(page.getByRole('status').filter({hasText:'변경계획을 승인했습니다'})).toBeVisible();expect(approvals).toBe(1);
 });

@@ -50,7 +50,7 @@ it('model-free acceptance: intake-generated work, concurrent failures, grounded 
   const approval={action:'approve',requestId:randomUUID(),fingerprint:view.fingerprint,pnus:[view.items[0].pnu],provisionalAcknowledged:true};
   expect((await call(c.id,production,approval)).assigned).toBe(8);expect((await call(c.id,production,approval)).alreadyApplied).toBe(true);
   expect((await call(c.id,workspace)).state.missions).toHaveLength(9);
-  expect((await call(c.id,operations,{action:'deliver',key:randomUUID()})).result).toMatchObject({delivered:1,provider:'MOCK_SMS'});
+  expect((await call(c.id,operations,{action:'deliver',key:randomUUID()})).result).toMatchObject({delivered:0,provider:'OWNER_SMS_DISABLED'});
   expect((await call(c.id,operations,{action:'deliver',key:randomUUID()})).result.delivered).toBe(0);
  }
  const normal=(await call('demo',workspace)).state as State,harvest=(normal.missions as Work[]).find(m=>m.operationCode==='harvest')!;
@@ -106,16 +106,16 @@ it('model-free acceptance: intake-generated work, concurrent failures, grounded 
  await call('janggye',sharing,{action:'offer',requestId:randomUUID(),version:(await call('janggye',laborGet)).version,borrowerCenterId:'demo',jobId:renewed.id,sourceHash:renewed.sourceHash,workerId:helper.id,response:'APP',travelMinutes:30,distanceKm:5,consent:true});
  expect((await call('demo',laborGet)).payload.jobs.find((j:any)=>j.id===renewed.id).borrowedNames).toEqual([helper.name]);
  for(const c of ['demo','janggye']){expect((await call(c,capacityGet)).notices.some((n:any)=>n.event==='PLAN_CHANGED')).toBe(true);expect((await call(c,resourcesGet)).notices.some((n:any)=>n.event==='CONFIRMED')).toBe(true)}
- const notice=await db.outbox.findFirstOrThrow({where:{id:{startsWith:'replan:'+proposal.proposalId+':'},farmerId:farmers.demo}});expect(notice.status).toBe('PENDING');
- expect((await call('demo',operations,{action:'deliver',key:randomUUID(),failFirst:true})).result).toMatchObject({attempted:1,delivered:0,provider:'MOCK_SMS'});
+ const notice=await db.outbox.findFirstOrThrow({where:{id:{startsWith:'replan:'+proposal.proposalId+':'},farmerId:farmers.demo}});expect(notice.status).toBe('RECORDED_ONLY');
+ expect((await call('demo',operations,{action:'deliver',key:randomUUID(),failFirst:true})).result).toMatchObject({attempted:0,delivered:0,provider:'OWNER_SMS_DISABLED'});
  expect((await call('demo',operations,{action:'deliver',key:randomUUID()})).result.attempted).toBe(0);
- // Advance time only; do not rewrite a queue item to manufacture a successful retry.
+ // Advancing time must not reactivate the retired owner delivery path.
  vi.useFakeTimers({toFake:['Date']});vi.setSystemTime(new Date(Date.now()+3000));
  try{
-  expect((await call('demo',operations,{action:'deliver',key:randomUUID()})).result.delivered).toBe(1);
+  expect((await call('demo',operations,{action:'deliver',key:randomUUID()})).result.delivered).toBe(0);
   expect((await call('demo',operations,{action:'deliver',key:randomUUID()})).result.delivered).toBe(0);
  }finally{vi.useRealTimers()}
- expect(await db.outbox.count({where:{id:notice.id,status:'DELIVERED',attempts:2}})).toBe(1);
+ expect(await db.outbox.count({where:{id:notice.id,status:'RECORDED_ONLY',attempts:0,sentAt:null}})).toBe(1);
  // Add another owner after recovery: existing missions and re-confirmed attendance stay intact.
  const stable=(await call('demo',workspace)).state as State,oldJobs=(await call('demo',laborGet)).payload.jobs;
  const fieldsRow=await db.workRecord.findUniqueOrThrow({where:{workspace_kind_id:{workspace:recordSpace('demo'),kind:'fields',id:'current'}}});

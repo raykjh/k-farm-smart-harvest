@@ -8,6 +8,7 @@ import {cropGuidelines} from '../lib/crop-guidelines';
 import {POST as register} from '../app/api/registrations/route';
 import {GET as preview,POST as approve} from '../app/api/annual-dispatch/route';
 import {POST as change} from '../app/api/cultivation-change/route';
+import {advanceAttendance,attendanceDates} from '../lib/labor-operations';
 it('same APIs register, change draft, approve reservations and create notification once',async()=>{
  if(!process.env.DATABASE_URL?.endsWith('/kfarm_test'))throw Error('isolated DB only');
  const session=await testSession(),id=randomUUID(),requestId=randomUUID(),contact=randomUUID(),pnu='5274036023106160004';
@@ -24,7 +25,12 @@ it('same APIs register, change draft, approve reservations and create notificati
   const operations=Object.fromEntries(cropGuidelines.rice.steps.map(s=>[s.code,{from:'2034-03-01',to:'2034-11-30',staff:1,transport:0,laborMinutesPer1000m2:60}]));
   const field={id:randomUUID(),pnu,address:'전북특별자치도 장수군 계북면 농소리 616-4',area:'1000',crop:'rice',mode:'delegated',tenure:'owned',ownerName:'',ownerPhone:'',evidence:'none',end:'',callAt:'',operator:'',callResult:'pending',scope:'',verified:'pending'};
   const b={requestId,consultationId:contact,consultationVersion:0,fieldVersion:0,testDataOnly:true,consultation:{farmer:{name:'홍통합',birth:'1960-01-01',phone:'000-0000-0000',contact:'sms'},fields:[field],consent:true,step:3},cultivations:[{cultivation:{id,pnu,crop:'rice',start:'2034-01-01',end:'2034-12-31',source:'REGISTERED'},context:{region:'계북면',operations:{rice:operations}}}]};
+  const laborBeforeRegistration=await db.workRecord.findUnique({where:{workspace_kind_id:laborKey}});
+  const rejected=await register(req('registrations',{...b,consultation:{...b.consultation,fields:[{...field,mode:'joint'}]}}));
+  expect(rejected.status).toBe(409);expect((await rejected.json()).error).toContain('위탁으로만');
+  expect(await db.workRecord.count({where:{kind:'consultation',id:contact}})).toBe(0);
   const saved=await register(req('registrations',b));expect(saved.status,await saved.clone().text()).toBe(200);
+  expect(await db.workRecord.findUnique({where:{workspace_kind_id:laborKey}})).toEqual(laborBeforeRegistration);
   expect((await(await register(req('registrations',b))).json()).alreadyApplied).toBe(true);
   const cropProposal=await change(req('cultivation-change',{id,crop:'potato',area:1000,action:'preview'}));expect(cropProposal.status,await cropProposal.clone().text()).toBe(200);
   expect((await cropProposal.json()).after.crop).toBe('potato');
@@ -78,7 +84,13 @@ it('same APIs register, change draft, approve reservations and create notificati
   const finalLabor=(await db.workRecord.findUniqueOrThrow({where:{workspace_kind_id:laborKey}})).payload as any;
   expect(finalLabor.jobs.find((j:any)=>j.id===job.id).status).toBe('STALE');
   expect(finalLabor.notices.some((n:any)=>n.workerId===workerId&&n.type==='CANCELLED')).toBe(true);
-  expect(finalLabor.notices.some((n:any)=>n.workerId===workerId&&n.type==='RECONFIRM')).toBe(true);
+  // The current SEVEN_TWO policy does not send an invitation eight years early.
+  // Cancellation is immediate; fresh attendance starts seven days before work.
+  expect(finalLabor.notices.some((n:any)=>n.workerId===workerId&&n.type==='RECONFIRM')).toBe(false);
+  const nextJob=finalLabor.jobs.find((j:any)=>j.status==='OPEN'&&j.attendance?.policy==='SEVEN_TWO');expect(nextJob).toBeTruthy();
+  expect(nextJob.invited).toEqual([]);
+  advanceAttendance(finalLabor,nextJob,attendanceDates(nextJob).allocateOn+'T00:00:00+09:00');
+  expect(finalLabor.notices.some((n:any)=>n.workerId===workerId&&n.jobId===nextJob.id&&n.type==='INVITE')).toBe(true);
   expect(finalLabor.jobs.filter((j:any)=>j.status==='OPEN').every((j:any)=>j.assigned.length===0)).toBe(true);
  }finally{
   await db.outbox.deleteMany({where:{farmerId:contact}});

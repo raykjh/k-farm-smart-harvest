@@ -1,5 +1,6 @@
 import {test,expect,type APIRequestContext,type BrowserContext} from '@playwright/test';
 import {randomUUID,randomBytes} from 'node:crypto';
+import {openWorkOrder} from './work-order-navigation';
 import {db} from '../lib/db';
 import {authKey,digest} from '../lib/auth';
 import {centerRegistry} from '../lib/center-registry';
@@ -118,9 +119,10 @@ test('public criteria -> four sequential intakes -> shared capacity -> approval 
   // Real packet persistence and stale-version invalidation after a wind replan.
   await post('demo','/api/equipment-missions',{action:'area',version:0,area:{pnu:pnuByCenter.demo,geometry:{type:'Polygon',coordinates:[[[127.60,35.78],[127.601,35.78],[127.601,35.781],[127.60,35.78]]]},source:'OPERATOR_DRAWN',reviewedOn:fixtureToday,accessAndExclusionsReviewed:true,note:'실측이 아닌 격리 검증용 작업구역 입력'}});
   expect((await get('demo','/api/equipment-missions')).tasks[0].blockers).toContain('FIELD_ACCESS_REVIEW_REQUIRED');
-  const equipmentPage=await open('demo','/?tab=equipment'),equipment=equipmentPage.getByTestId('equipment-missions');
-  await equipment.locator('summary').first().click();await equipment.getByText('현장 확인 작업구역 저장',{exact:true}).click();
-  await equipment.getByLabel('등록 농지',{exact:true}).selectOption(pnuByCenter.demo);
+  const target=(await get('demo','/api/equipment-missions')).tasks.find((t:any)=>t.date===day('07-01')&&t.equipmentId.includes('DR'));
+  const equipmentPage=await open('demo','/?tab=schedule'),equipment=await openWorkOrder(equipmentPage,target);
+  await equipment.getByText('현장 확인 작업구역 저장',{exact:true}).click();
+  await expect(equipment.getByLabel('등록 농지',{exact:true})).toHaveAttribute('readonly','');
   await equipment.getByRole('checkbox',{name:'진입로·위험구역·제외구역을 별도로 확인했습니다.',exact:true}).check();
   await equipment.getByRole('checkbox',{name:'작업 장비가 농지에 안전하게 진입 가능한지 현장 확인했습니다.',exact:true}).check();
   await equipment.getByRole('button',{name:'작업구역 저장',exact:true}).click();
@@ -128,9 +130,9 @@ test('public criteria -> four sequential intakes -> shared capacity -> approval 
   expect((await get('demo','/api/fields')).payload[0].rights).toBe('pending');
   const packet=(await get('demo','/api/equipment-missions')).tasks.find((t:any)=>t.date===day('07-01')&&t.equipmentId.includes('DR'));
   expect(packet.ready,JSON.stringify(packet.blockers)).toBe(true);
-  const taskPanel=equipment.locator('details').filter({has:equipmentPage.locator('summary',{hasText:`${packet.date} · ${packet.label} · ${packet.equipmentId}`})}).first();
-  await taskPanel.locator('summary').first().click();await taskPanel.getByRole('button',{name:'전달자료 생성',exact:true}).click();await expect(taskPanel).toContainText('PREPARED');
-  await taskPanel.getByRole('button',{name:'내부 연결 수신 확인',exact:true}).click();await expect(taskPanel).toContainText('LOCAL_RECEIPT_RECORDED');
+  const taskPanel=equipment.getByTestId('work-order-packet-'+packet.id);
+  await taskPanel.getByRole('button',{name:'전달자료 생성',exact:true}).click();await expect(equipment.getByTestId('work-order-summary')).toContainText('작성 완료');
+  await taskPanel.getByRole('button',{name:'내부 연결 수신 확인',exact:true}).click();await expect(equipment.getByTestId('work-order-summary')).toContainText('내부 수신 확인');
   await equipmentPage.screenshot({path:info.outputPath('equipment-local-receipt.png'),fullPage:true});
   const receipt=(await db.workRecord.findUniqueOrThrow({where:{workspace_kind_id:{workspace:recordSpace('demo'),kind:'equipmentMission',id:packet.id}}})).payload;
   expect(receipt).toMatchObject({hardwareSent:false,executionAuthorized:false});

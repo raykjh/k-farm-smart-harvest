@@ -1,7 +1,24 @@
 import {afterEach,expect,it,vi} from 'vitest';
-import {applicationOrigins,applicationRedirect,secureSessionCookie,setupApplicationOrigin,validApplicationOrigin} from '../lib/application-origin';
+import {applicationOrigins,applicationRedirect,secureSessionCookie,setupApplicationOrigin,validApplicationOrigin,validApplicationRequest} from '../lib/application-origin';
 
 afterEach(()=>vi.unstubAllEnvs());
+it('allows originless reads only on the canonical Host, never originless mutations',()=>{
+ vi.stubEnv('KFARM_APP_ORIGIN','https://judge.example');
+ const r=(method:string,headers:Record<string,string>)=>new Request('http://127.0.0.1:3100/api/workspace',{method,headers});
+ for(const method of ['GET','HEAD']){
+  expect(validApplicationRequest(r(method,{host:'judge.example'}))).toBe(true);
+  expect(validApplicationRequest(r(method,{host:'judge.example',origin:'https://judge.example'}))).toBe(true);
+  expect(validApplicationRequest(r(method,{host:'judge.example',origin:'https://evil.invalid'}))).toBe(false);
+  expect(validApplicationRequest(r(method,{host:'evil.invalid','x-forwarded-host':'judge.example'}))).toBe(false);
+  expect(validApplicationRequest(r(method,{}))).toBe(false);
+ }
+ for(const method of ['POST','PUT','PATCH','DELETE']){
+  expect(validApplicationRequest(r(method,{host:'judge.example'}))).toBe(false);
+  expect(validApplicationRequest(r(method,{host:'judge.example',origin:'https://judge.example'}))).toBe(true);
+ }
+ vi.stubEnv('KFARM_APP_ORIGIN','not-a-url');
+ expect(validApplicationRequest(r('GET',{host:'127.0.0.1:3100'}))).toBe(false);
+});
 const request=(origin:string,host:string,forwarded='https')=>new Request('http://127.0.0.1:3100/api/auth',{headers:{origin,host,'x-forwarded-proto':forwarded,'x-forwarded-host':'judge.example'}});
 
 it('keeps the two matching local origin and host pairs without enabling a remote host',()=>{

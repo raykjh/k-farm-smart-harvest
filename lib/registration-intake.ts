@@ -4,7 +4,7 @@ import type {Consultation} from './consultation';
 export type ParcelGeometry={type:'Polygon';coordinates:number[][][]}|{type:'MultiPolygon';coordinates:number[][][][]};
 export type IntakeField=Consultation['fields'][number]&{selected:boolean;geometry?:ParcelGeometry};
 export function intakeField(pnu:string,address:string,geometry?:ParcelGeometry):IntakeField{
- return {id:crypto.randomUUID(),pnu,address,area:'',crop:'',mode:'joint',tenure:'owned',ownerName:'',ownerPhone:'',evidence:'none',end:'',callAt:'',operator:'',callResult:'pending',scope:'',verified:'pending',conditions:emptyConditions(),selected:true,geometry};
+ return {id:crypto.randomUUID(),pnu,address,area:'',crop:'',mode:'delegated',tenure:'owned',ownerName:'',ownerPhone:'',evidence:'none',end:'',callAt:'',operator:'',callResult:'pending',scope:'',verified:'pending',conditions:emptyConditions(),selected:true,geometry};
 }
 export function formatBirth(value:string){const d=value.replace(/\D/g,'').slice(0,8);return [d.slice(0,4),d.slice(4,6),d.slice(6,8)].filter(Boolean).join('-')}
 export function validBirth(value:string,today:string){return /^\d{4}-\d{2}-\d{2}$/.test(value)&&value>='1900-01-01'&&value<=today&&Number.isFinite(Date.parse(value))&&new Date(value).toISOString().slice(0,10)===value}

@@ -16,7 +16,7 @@ describe('qualified crew in the normal operating path',()=>{
   expect(operatingCrewDemands(s,m)).toEqual({'demo:operators':2,'demo:workers':2});
   expect(operatingCrewDemands(s,{...m,machineOperators:1,ordinaryWorkers:1})).toEqual({'demo:operators':1,'demo:workers':1});
   expect(operatingCrewDemands(s,{...m,resourceOccupancyOnly:true})).toEqual({});
-  expect(operatingCrewDemands(s,{...m,owner:'농부',resourceId:null})).toEqual({});
+  expect(operatingCrewDemands(s,{...m,owner:'농부',resourceId:null})).toEqual({'demo:operators':0,'demo:workers':2});
   expect(()=>operatingCrewDemands(s,{...m,machineOperators:3})).toThrow('수요');
   s.crewCapacity={operators:20,workers:1};expect(()=>crewCapacityLimits(s)).toThrow('전체');
  });

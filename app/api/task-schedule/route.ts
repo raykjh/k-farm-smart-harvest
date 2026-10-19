@@ -13,7 +13,6 @@ import type {Prisma} from '@prisma/client';
 export const runtime='nodejs';
 const schema=z.object({action:z.enum(['preview','save']),missionId:z.string().min(1).max(60),preferred:z.string(),token:z.string().optional(),start:z.number().int().optional(),key:z.string().uuid().optional()}).strict();
 async function handlePOST(req:NextRequest){
- const origin=req.headers.get('origin');if(!['127.0.0.1:3100','localhost:3100'].includes(req.headers.get('host')??'')||(origin&&!['http://127.0.0.1:3100','http://localhost:3100'].includes(origin)))return NextResponse.json({error:'출처 거부'},{status:403});
  try{const b=schema.parse(await req.json());const result=await db.$transaction(async tx=>{
   await tx.$queryRaw`SELECT id FROM "Center" WHERE id=${activeCenterId()} FOR UPDATE`;
   const row=await tx.center.findUniqueOrThrow({where:{id:activeCenterId()}}),s=await resourceView(tx,row.state as unknown as State,activeCenterId()),previous=structuredClone(s);

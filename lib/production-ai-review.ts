@@ -30,6 +30,7 @@ export async function reviewProductionCrop(input:CropReviewInput,actor:string){
    await tx.workRecord.update({...requestKey(row.id),data:{payload:json({...p,status:'OPERATOR_REVIEW',error:'중단된 AI 검토. 기존 결과는 적용하지 않았습니다.'}),version:{increment:1}}});
   }
   const view=await refreshProduction(tx),source=await readProductionSource(tx);
+  if(view.integratedPlan)throw Error('통합계획은 작물·자원을 함께 다시 검토하세요. 개별 판단으로 덮어쓰지 않았습니다.');
   if(view.fingerprint!==input.fingerprint)throw Error('농지·계획·작물 후보가 변경되었습니다. 다시 확인하세요.');
   const item=view.items.find((i:any)=>i.pnu===input.pnu);
   if(item?.status!=='REVIEW'||!item.proposal)throw Error('실행 가능한 새 작물 계획이 있어야 AI가 비교할 수 있습니다.');

@@ -1,5 +1,7 @@
 import {test,expect} from './authenticated-test';
 import {emptyCenter} from '../lib/center-registry';
+import {openWorkOrder} from './work-order-navigation';
+import {dateSlot} from '../lib/scheduling-engine';
 
 test('regional policy is editable in crop information and missing totals are not shown as zero production',async({page})=>{
  let saved:any=null;let version=0;
@@ -35,11 +37,15 @@ test('adjacent labor confirmation includes explicit consent, travel and attendan
 
 test('equipment packet screen blocks missing work-area evidence and shows local-only execution boundary',async({page})=>{
  const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
- await page.route('**/api/workspace**',r=>r.fulfill({json:{state:emptyCenter('demo'),notices:[],aiMode:'DEMO_RULES'}}));
+ const state=emptyCenter('demo');state.registered=true;state.planned=true;
+ state.fields=[{id:'5274036023106160004',farmerId:'fixture',name:'검증 농지',address:'계북면 검증 농지',area:1000,crop:'쌀',mode:'완전 위탁형',access:true,water:true,confirmed:true,cluster:'fixture',source:'DEMO_ASSUMPTION'}];
+ state.machines=[{id:'JB23DR01',name:'드론',type:'드론',status:'AVAILABLE',safetyLock:false,capacityHaHour:1}];
+ state.missions=[{id:'task',fieldId:state.fields[0].id,label:'방제',crop:'쌀',scheduledDate:'2032-06-01',month:6,owner:'장비',status:'PLANNED',resourceId:'JB23DR01',start:dateSlot('2032-06-01')-dateSlot('2026-09-09'),duration:4,deadline:4,priority:1,batchKey:'fixture',staff:1,transport:1}];
+ await page.route('**/api/workspace**',r=>r.fulfill({json:{state,notices:[],aiMode:'DEMO_RULES'}}));
  await page.route('**/api/equipment-missions',r=>r.fulfill({json:{canManage:true,fields:[{id:'5274036023106160004',address:'계북면 검증 농지'}],areas:[],tasks:[{id:'task',fieldId:'5274036023106160004',label:'방제',date:'2032-06-01',equipmentId:'JB23DR01',fingerprint:'a'.repeat(64),ready:false,status:'NOT_PREPARED',blockers:['OPERATOR_REVIEWED_WORK_AREA_REQUIRED'],data:{executionAuthorized:false,transport:'LOCAL_ADAPTER_ONLY'}}]}}));
- await page.goto('/?tab=equipment');const panel=page.getByTestId('equipment-missions');await panel.locator('summary').first().click();
- await panel.getByText('2032-06-01 · 방제 · JB23DR01',{exact:true}).click();
- await expect(panel).toContainText('현장 작업구역 확인 필요');await expect(panel.getByRole('button',{name:'전달자료 생성',exact:true})).toBeDisabled();await expect(panel).toContainText('실제 장비 전송·작동 승인은 하지 않습니다.');
+ const panel=await openWorkOrder(page,state.missions[0]);
+ await expect(panel).toContainText('현장 작업구역 확인 필요');await expect(panel.getByRole('button',{name:'전달자료 생성',exact:true})).toBeDisabled();
+ await panel.getByText('기술 데이터 · 장비 연동',{exact:true}).click();await expect(panel).toContainText('실제 장비 전송·작동 기능은 연결되지 않았습니다.');
  await panel.getByText('현장 확인 작업구역 저장',{exact:true}).click();await page.setViewportSize({width:390,height:844});
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
  await page.screenshot({path:'.data/validation/20261003-ai-coordination/equipment-mobile.png',fullPage:true});expect(errors).toEqual([]);

@@ -43,7 +43,7 @@ export async function cancelLinkedReservation(tx:Prisma.TransactionClient,id:str
  await tx.workRecord.delete({where:{workspace_kind_id:key}});
  await tx.center.update({where:{id:r.centerId},data:{state:JSON.parse(JSON.stringify(state)),version:{increment:1}}});
  const farmer=state.fields.find(f=>f.id===mission.fieldId)?.farmerId;
- if(farmer)await tx.outbox.create({data:{id:'cancel-reservation:'+id,centerId:r.centerId,farmerId:farmer,planVersion:state.planVersion,body:`[모의 알림] ${mission.label}의 예약이 취소되어 재배정 대기 중입니다. 센터에 문의하세요.`}});
+ if(farmer)await tx.outbox.create({data:{status:'RECORDED_ONLY',id:'cancel-reservation:'+id,centerId:r.centerId,farmerId:farmer,planVersion:state.planVersion,body:`[모의 알림] ${mission.label}의 예약이 취소되어 재배정 대기 중입니다. 센터에 문의하세요.`}});
  await tx.audit.create({data:{centerId:r.centerId,action:'reservation.cancelLinked',detail:{actorId:actor.id,before,after:mission,reason,reservationId:id}}});
  return {ok:true,status:'CANCELLED',taskStatus:'HELD',planVersion:state.planVersion};
 }

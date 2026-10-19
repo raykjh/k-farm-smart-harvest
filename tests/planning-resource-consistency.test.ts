@@ -36,8 +36,10 @@ for (const conflict of ['field','machine','person','staff','transport','none'] a
  it(`initial placement and replan verification agree about ${conflict} conflicts`, async () => {
   const {plan,initialState,contract,assignments} = fixture(conflict);
   const before = JSON.stringify(initialState);
-  expect((await previewAnnualDispatch(plan,initialState,'2027-05-01')).assignments).toHaveLength(conflict === 'none' ? 1 : 0);
-  if (conflict === 'none') expect(() => verifyAssignments(contract,assignments,'GAPS_ONLY')).not.toThrow();
+  // A field owner is no longer a dedicated worker: ordinary labor capacity governs both paths.
+  const feasible=conflict==='none'||conflict==='person';
+  expect((await previewAnnualDispatch(plan,initialState,'2027-05-01')).assignments).toHaveLength(feasible ? 1 : 0);
+  if (feasible) expect(() => verifyAssignments(contract,assignments,'GAPS_ONLY')).not.toThrow();
   else expect(() => verifyAssignments(contract,assignments,'GAPS_ONLY')).toThrow('충돌');
   expect(JSON.stringify(initialState)).toBe(before);
  });

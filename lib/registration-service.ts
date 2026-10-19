@@ -13,10 +13,12 @@ import type {State} from './types';
 import {resourceView} from './center-resources';
 import {serviceTerm} from './continuous-production';
 import {lockProduction,registerParticipation,refreshProduction} from './production-service';
+import {authorizeDemoRegistration,saveRegistrationOrigin} from './registration-origin';
 export const registrationCommand=z.object({
  requestId:z.string().uuid(),consultationId:z.string().uuid(),consultationVersion:z.number().int().nonnegative(),fieldVersion:z.number().int().nonnegative(),testDataOnly:z.literal(true),
  consultation:consultationSchema,cultivations:z.array(z.object({cultivation:cultivationSchema,context:planningContext}).strict()).max(30).default([]),
  continuousService:serviceTerm.optional(),
+ demoInputBatchId:z.string().uuid().optional(),
 }).strict();
 export type RegistrationCommand=z.infer<typeof registrationCommand>;
 // Caller owns the transaction. No external effects or synthetic scheduling shortcuts.
@@ -29,14 +31,19 @@ export async function saveRegistration(tx:Prisma.TransactionClient,input:unknown
  const receipt=await tx.workRecord.findUnique(key('registrationReceipt',b.requestId));
  if(receipt){const p=receipt.payload as any;if(p.actorId!==actorId||p.hash!==hash)throw Error('요청 식별자가 다른 입력에 사용되었습니다.');return {...p.result,alreadyApplied:true};}
  const old=await tx.workRecord.findUnique(key('consultation',b.consultationId));
+ if(b.demoInputBatchId){
+  if(old||b.consultationVersion!==0)throw Error('기존 상담을 가상 신청으로 변경할 수 없습니다.');
+  await authorizeDemoRegistration(tx,b.demoInputBatchId,b.requestId,hash);
+ }
  const inventory=await tx.workRecord.findUnique(key('fields','current'));
  if((old?.version??0)!==b.consultationVersion||(inventory?.version??0)!==b.fieldVersion)throw Error('상담 또는 농지가 변경되었습니다. 다시 불러오세요.');
  if(!b.consultation.consent||!b.consultation.farmer.name.trim()||!b.consultation.farmer.birth||!b.consultation.farmer.phone.trim())throw Error('신청인 정보와 설명 확인이 필요합니다.');
  if(!b.consultation.fields.length)throw Error('등록할 농지가 필요합니다.');
+ if(b.consultation.fields.some(f=>f.mode!=='delegated'))throw Error('농지는 위탁으로만 등록합니다. 작물 선택과 농작업은 센터에서 관리하며 근무 신청은 인력에서 별도로 등록하세요.');
  const fields=fieldInventory.parse(b.consultation.fields.map(f=>{
   if(f.tenure!=='owned')throw Error('신규 신청 대상은 본인 소유 농지입니다.');
   assertOwnerApplication(b.consultation,f.pnu);
-  return {pnu:f.pnu,address:f.address,area:Number(f.area),crop:f.crop,mode:f.mode==='delegated'?'full':'joint',group:'',rights:'pending',consultationId:b.consultationId,conditions:f.conditions};
+  return {pnu:f.pnu,address:f.address,area:Number(f.area),crop:f.crop,mode:'full',group:'',rights:'pending',consultationId:b.consultationId,conditions:f.conditions,...(f.boundary?{boundary:f.boundary}:{})};
  }));
  const merged=fieldInventory.parse([...(inventory?.payload as any[]??[]),...fields]);
  for(const pnu of fields.map(f=>f.pnu).sort())await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`field-custody:${pnu}`},0))`;
@@ -58,6 +65,7 @@ export async function saveRegistration(tx:Prisma.TransactionClient,input:unknown
  const put=async(kind:string,id:string,version:number,payload:unknown)=>tx.workRecord.upsert({...key(kind,id),create:{workspace,kind,id,version,payload:JSON.parse(JSON.stringify(payload))},update:{version,payload:JSON.parse(JSON.stringify(payload)),updatedAt:new Date()}});
  await put('consultation',b.consultationId,b.consultationVersion+1,b.consultation);
  await put('fields','current',version,merged);
+ if(b.demoInputBatchId)await saveRegistrationOrigin(tx,{batchId:b.demoInputBatchId,consultationId:b.consultationId,requestId:b.requestId,inputHash:hash,pnus:fields.map(f=>f.pnu),actorId});
  const drafts=[];
  for(const {cultivation,plan} of plans){
   await put('cultivation',cultivation.id,1,cultivation);await put('cultivationPlan',cultivation.id,1,plan);

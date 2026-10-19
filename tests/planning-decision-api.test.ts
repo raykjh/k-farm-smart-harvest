@@ -78,11 +78,11 @@ it('rejects an old comparison when the source plan changes before preview',async
  const result=await call(body.results[0].previewRequest);expect(result.status).toBe(409);expect((await result.json()).error).toContain('비교 이후');
  expect(mocks.write).not.toHaveBeenCalled();expect(mocks.agent).not.toHaveBeenCalled();
 });
-it('refuses capacity injection and keeps approval permissions unchanged',async()=>{
+it('refuses capacity injection while allowing home-center staff to apply a verified replan',async()=>{
  const response=await call({action:'compare',ids:['task'],alternatives:[{id:'one',label:'one',staff:999}]});
  expect(response.status).toBe(409);expect(mocks.calculate).not.toHaveBeenCalled();expect(mocks.write).not.toHaveBeenCalled();
  const staff={role:'CENTER_STAFF',centerId:'demo'} as Principal;
  expect(permitted(staff,'replanning','POST',{action:'compare'})).toBe(true);
- expect(permitted(staff,'replanning','POST',{action:'approve'})).toBe(false);
+ expect(permitted(staff,'replanning','POST',{action:'approve'})).toBe(true);
  expect(permitted({...staff,centerId:'other'},'replanning','POST',{action:'compare'})).toBe(false);
 });

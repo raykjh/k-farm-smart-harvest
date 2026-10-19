@@ -63,8 +63,10 @@ it('keeps the last reserved date when closing a task after booking release',asyn
  expect(closed.missions[0]).toMatchObject({status:'CANCELLED',scheduledDate:'2099-05-01',originalScheduledDate:'2099-04-20',resourceId:null});
  expect(await db.workRecord.count({where:{workspace:'shared',kind:'resourceReservation'}})).toBe(0);
  expect(await db.workRecord.count({where:{workspace:'shared',kind:'cancelledReservation',id:r.id}})).toBe(1);
- expect(await db.outbox.count({where:{centerId:'demo',status:'SUPERSEDED'}})).toBe(1);
- expect(await db.outbox.count({where:{centerId:'demo',status:'PENDING'}})).toBe(1);
+ expect(await db.outbox.count({where:{centerId:'demo',status:'SUPERSEDED'}})).toBe(0);
+ // Owner notices remain historical records; only worker SMS may be queued.
+ expect(await db.outbox.count({where:{centerId:'demo',status:'PENDING'}})).toBe(0);
+ expect(await db.outbox.count({where:{centerId:'demo',status:'RECORDED_ONLY'}})).toBe(2);
 });
 it('does not cancel completed, started, safety-locked or already-worked jobs',async()=>{
  for(const change of ['COMPLETED','STARTED','LOCK','LABOR']){

@@ -11,7 +11,8 @@ export type WorkMission=Mission&{workAreaM2?:number;setupMinutes?:number;equipme
 export type WorkSplit={sourceId:string;partIds:string[];areaHa:number;basis:EquipmentWork['basis']};
 export function missionCandidates(s:State,m:Mission,input:ReplanInput):ReplanResource[]{
  const explicit=replacementFor(s,m,input.replacement);
- return explicit?[{machine:explicit.machine,borrowed:!!s.centerSharing&&explicit.machine.ownerCenterId!==s.centerSharing.centerId}]:resourceCandidates(s,m,input.automaticReplacement!==false);
+ const candidates=explicit?[{machine:explicit.machine,borrowed:!!s.centerSharing&&explicit.machine.ownerCenterId!==s.centerSharing.centerId}]:resourceCandidates(s,m,input.automaticReplacement!==false);
+ return input.allowBorrowing===false?candidates.filter(r=>!r.borrowed||r.machine?.id===m.resourceId):candidates;
 }
 /** Second attempt only. Preserve the original ID as part 1; its pre-change
  * snapshot remains in taskPlanChange. Never split started/closed/locked work. */
