@@ -10,4 +10,8 @@ describe('work report',()=>{
  it('does not use a stale planned-date assessment',()=>{expect(buildWorkReport(state,[{...record,plannedDate:'2026-07-01'}],'2026-09-20').rows[0].confirmed).toBe(false)});
  it('requires actual confirmation and never infers actual hours from plan',()=>{const s=structuredClone(state);s.fields[0].source='REGISTERED';s.missions[0].status='COMPLETED';expect(buildWorkReport(s,[],'2026-09-20').rows[0].confirmed).toBe(false);const e={...record,source:'ACTUAL',actualFinishedAt:'2026-08-01T10:00:00+09:00',confirmedBy:'operator',confirmedAt:'2026-08-01'};expect(buildWorkReport(s,[e],'2026-09-20').rows[0]).toMatchObject({confirmed:true,source:'ACTUAL',executionMinutes:null})});
  it('rejects future completion and negative durations',()=>{expect(buildWorkReport(state,[record],'2026-07-01').rows[0].confirmed).toBe(false);expect(buildWorkReport(state,[{...record,simulatedStartedAt:'2026-08-01T11:00:00+09:00'}],'2026-09-20').rows[0].executionMinutes).toBeNull()});
+ it('retains the first matching correction and ignores other dates',()=>{
+  const evidence=[{...record,plannedDate:'2026-07-01',assessment:'SIMULATED_HELD'},{...record,version:3,recordId:'latest'},{...record,assessment:'SIMULATED_HELD',version:2}];
+  expect(buildWorkReport(state,evidence,'2026-09-20').rows[0]).toMatchObject({status:'COMPLETED',confirmed:true,evidenceId:'latest',evidenceVersion:3});
+ });
 });

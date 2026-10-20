@@ -1,11 +1,10 @@
 import {withAuth} from '@/lib/auth-route';
 import {NextRequest} from 'next/server';
+import {allowedMapTile} from '@/lib/map-tile-bounds';
 export const dynamic='force-dynamic';
 async function handleGET(req:NextRequest){
  const h={'Cache-Control':'no-store'};const z=Number(req.nextUrl.searchParams.get('z')),x=Number(req.nextUrl.searchParams.get('x')),y=Number(req.nextUrl.searchParams.get('y'));
- if(![z,x,y].every(Number.isInteger)||z<11||z>18||x<0||y<0||x>=2**z||y>=2**z)return new Response(null,{status:400,headers:h});
- const lon=(x+.5)/2**z*360-180,lat=Math.atan(Math.sinh(Math.PI*(1-2*(y+.5)/2**z)))*180/Math.PI;
- if(lon<127.3||lon>127.95||lat<35.5||lat>36.05)return new Response(null,{status:400,headers:h});
+ if(!allowedMapTile(z,x,y))return new Response(null,{status:400,headers:h});
  const key=process.env.VWORLD_API_KEY,domain=process.env.VWORLD_DOMAIN;if(!key||!domain)return new Response(null,{status:503,headers:h});
  const layer=req.nextUrl.searchParams.get('layer');
  if(layer&&layer!=='cadastral')return new Response(null,{status:400,headers:h});

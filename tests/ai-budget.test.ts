@@ -1,11 +1,28 @@
 import {describe,it,expect,vi,afterEach,beforeEach} from 'vitest';
 const mock=vi.hoisted(()=>({execute:vi.fn(),transaction:vi.fn()}));
 vi.mock('../lib/db',()=>({db:{$transaction:mock.transaction,aiCall:{create:vi.fn().mockResolvedValue({}),update:vi.fn().mockResolvedValue({})}}}));
-import {validateRequest,reserveBudget,budgetedCompletion,APPROVED_MODEL,reservationMicroUsd,usageEstimate,PRICE_REVIEW_EXPIRES_AT,VALIDATION_MICRO_USD,effectiveValidationCeiling} from '../lib/ai-budget';
+import {validateRequest,reserveBudget,budgetedCompletion,APPROVED_MODEL,reservationMicroUsd,usageEstimate,PRICE_REVIEW_EXPIRES_AT,VALIDATION_MICRO_USD,effectiveValidationCeiling,effectivePrimaryCeiling,MAX_PLANNING_OUTPUT_TOKENS,JOINT_PLAN_OUTPUT_TOKENS,MAX_REQUEST_RESERVATION_MICRO_USD} from '../lib/ai-budget';
 import {db} from '../lib/db';
 beforeEach(()=>{vi.useFakeTimers({toFake:['Date']});vi.setSystemTime(new Date('2026-09-11T00:00:00Z'))});
 afterEach(()=>{vi.useRealTimers();vi.unstubAllGlobals();vi.unstubAllEnvs();vi.restoreAllMocks();mock.execute.mockReset();mock.transaction.mockReset();});
 describe('AI budget fail closed',()=>{
+ it('defaults to the cumulative development stop and requires an explicit judging phase',async()=>{
+  vi.stubEnv('KFARM_AI_SPENDING_PHASE','');expect(effectivePrimaryCeiling()).toBe(10_000_000);
+  mock.execute.mockResolvedValueOnce(0).mockResolvedValueOnce(1).mockResolvedValueOnce(0).mockResolvedValueOnce(1);
+  mock.transaction.mockImplementation(fn=>fn({$executeRaw:mock.execute}));
+  await reserveBudget(5000);expect(mock.execute.mock.calls[1]).toContain(10_000_000);
+  vi.stubEnv('KFARM_AI_SPENDING_PHASE','judging');expect(effectivePrimaryCeiling()).toBe(20_000_000);
+  vi.stubEnv('KFARM_AI_SPENDING_PHASE','typo');expect(()=>effectivePrimaryCeiling()).toThrow('Invalid');
+ });
+ it('permits enough planning output while retaining the per-call money cap and smaller diagnostic profile',async()=>{
+  expect(JOINT_PLAN_OUTPUT_TOKENS).toBe(32768);
+  expect(()=>validateRequest({model:APPROVED_MODEL,max_tokens:JOINT_PLAN_OUTPUT_TOKENS},'planning')).not.toThrow();
+  expect(()=>validateRequest({model:APPROVED_MODEL,max_tokens:4097},'diagnostic')).toThrow();
+  const largest={model:APPROVED_MODEL,max_tokens:MAX_PLANNING_OUTPUT_TOKENS,messages:'a'.repeat(15000)};
+  expect(reservationMicroUsd(largest,'planning')).toBeLessThanOrEqual(500_000);
+  expect(MAX_REQUEST_RESERVATION_MICRO_USD).toBe(500_000);
+  await expect(reserveBudget(500_001)).rejects.toThrow('Invalid');expect(mock.transaction).not.toHaveBeenCalled();
+ });
  it('keeps the reviewed window open through judging without removing the expiry or expanding the slice',async()=>{
   expect(Date.parse(PRICE_REVIEW_EXPIRES_AT)).toBeGreaterThan(Date.parse('2026-12-15T20:00:00Z'));
   expect(Date.parse(PRICE_REVIEW_EXPIRES_AT)).toBeLessThanOrEqual(Date.parse('2026-12-17T00:00:00Z'));
@@ -54,11 +71,11 @@ describe('AI budget fail closed',()=>{
   expect(()=>validateRequest({model:APPROVED_MODEL,max_tokens:32,reasoning_effort:'none'})).not.toThrow();
  });
  it('bounds the shared schedule/crop thinking profile without widening general calls',async()=>{
-  const body={model:APPROVED_MODEL,max_tokens:4096,reasoning_effort:'low'};
+  const body={model:APPROVED_MODEL,max_tokens:MAX_PLANNING_OUTPUT_TOKENS,reasoning_effort:'low'};
   expect(()=>validateRequest(body,'planning')).not.toThrow();
   expect(reservationMicroUsd(body,'planning')).toBeGreaterThanOrEqual(5000);
   expect(()=>validateRequest(body)).toThrow();
-  for(const patch of [{max_tokens:4097},{reasoning_effort:'medium'},{stream:true},{n:2},{chat_template_kwargs:{enable_thinking:true}}]){
+  for(const patch of [{max_tokens:MAX_PLANNING_OUTPUT_TOKENS+1},{reasoning_effort:'medium'},{stream:true},{n:2},{chat_template_kwargs:{enable_thinking:true}}]){
    expect(()=>validateRequest({...body,...patch},'planning')).toThrow();
   }
   vi.stubEnv('AI_MODE','nebius');vi.stubEnv('NEBIUS_API_KEY','test-not-real');

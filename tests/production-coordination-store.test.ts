@@ -4,6 +4,7 @@ import {readProductionCoordination,coordinationPolicyKey} from '../lib/productio
 import {emptyCoordinationPolicy} from '../lib/production-coordination';
 import {permitted} from '../lib/auth-policy';
 import {testPrincipal} from './auth-fixture';
+import {emptyCenter} from '../lib/center-registry';
 it('aggregates four-center cultivation plans without exposing owner contacts and keeps unknown yield distinct',async()=>{
  if(!process.env.DATABASE_URL?.endsWith('/kfarm_test'))throw Error('isolated DB required');
  await expect(db.$transaction(async tx=>{
@@ -11,6 +12,7 @@ it('aggregates four-center cultivation plans without exposing owner contacts and
   const policy=emptyCoordinationPolicy();policy.yields.push({crop:'rice',commodity:'MILLED_RICE',kgPer1000m2:{low:400,high:500},sourceUrl:'https://example.com/test',method:'test only',checkedOn:'2026-01-01',validUntil:'2032-12-31'});
   await tx.workRecord.create({data:{...coordinationPolicyKey,payload:JSON.parse(JSON.stringify(policy))}});
   for(const [workspace,id,crop] of [['sandbox','one','rice'],['center:janggye','two','rice'],['center:gyenam','three','pepper']] as const){
+   const centerId=workspace==='sandbox'?'demo':workspace.slice(7);await tx.center.upsert({where:{id:centerId},create:{id:centerId,state:JSON.parse(JSON.stringify(emptyCenter(centerId)))},update:{}});
    await tx.workRecord.create({data:{workspace,kind:'cultivation',id,payload:{id,pnu:'123',crop,start:'2032-01-01',end:'2033-01-01',source:'REGISTERED'}}});
    await tx.workRecord.create({data:{workspace,kind:'cultivationPlan',id,payload:{context:{},plots:[{pnu:'123',area:1000,crop,consultationId:'private-owner',tasks:[{operationCode:'harvest',window:{from:'2032-10-01',to:'2032-10-31'}}]}]}}});
   }
@@ -18,7 +20,7 @@ it('aggregates four-center cultivation plans without exposing owner contacts and
   throw Error('ROLLBACK_COORDINATION');
  })).rejects.toThrow('ROLLBACK_COORDINATION');
 });
-it('allows global references and own-center administration but denies staff edits',()=>{
+it('allows global references and own-center administration for both center roles',()=>{
  expect(permitted({...testPrincipal,role:'SUPER_ADMIN',centerId:null},'production-coordination','POST',{})).toBe(true);
- expect(permitted({...testPrincipal,role:'CENTER_STAFF'},'production-coordination','POST',{})).toBe(false);
+ expect(permitted({...testPrincipal,role:'CENTER_STAFF'},'production-coordination','POST',{})).toBe(true);
 });

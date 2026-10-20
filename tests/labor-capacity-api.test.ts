@@ -27,7 +27,7 @@ it('runs authenticated offer -> receiver confirmation -> real reservation -> att
  try{
   expect((await GET(new NextRequest('http://127.0.0.1:3100/api/labor-capacity'))).status).toBe(401);
   const first=await read(owner),id=randomUUID(),body={action:'offer',requestId:id,rosterVersion:first.rosterVersion,window:fixture.window};
-  await capacity(staff,body,403);
+  await capacity(staff,{...body,window:{...fixture.window,borrowerCenterId:'gyenam'}},409);
   await capacity(owner,{...body,window:{...fixture.window,borrowerCenterId:'gyenam'}},409);
   await capacity(owner,body);expect((await capacity(owner,body)).alreadyApplied).toBe(true);
   await capacity(owner,{...body,window:{...fixture.window,reason:'changed request'}},409);

@@ -1,3 +1,4 @@
+import {isCenterOperator} from './auth-policy';
 import {createHash} from 'node:crypto';
 import {z} from 'zod';
 import type {Prisma} from '@prisma/client';
@@ -20,7 +21,7 @@ export const loanLifecycleInput=z.discriminatedUnion('action',[
 type Terms=z.infer<typeof terms>;
 const hash=(v:unknown)=>createHash('sha256').update(JSON.stringify(v)).digest('hex');
 const key=(id:string)=>({workspace:'shared',kind:'equipmentLoan',id});
-function manager(actor:Principal){if(actor.role!=='CENTER_ADMIN'||!knownCenter(actor.centerId))throw Error('센터 관리자 권한 필요');}
+function manager(actor:Principal){if(!isCenterOperator(actor)||!knownCenter(actor.centerId))throw Error('센터 관리자 권한 필요');}
 function command(b:Terms):Terms{return {id:b.id,version:b.version,operation:b.operation,from:b.from,to:b.to,returnedOn:b.returnedOn,reason:b.reason};}
 
 /** Read-only impact review; authority and all live dependencies are rechecked on apply. */

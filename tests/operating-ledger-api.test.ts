@@ -21,7 +21,7 @@ it('persists field shipments, task costs, owner payments and append-only correct
   const before=await db.workRecord.count({where:{kind:'operatingLedger'}});const view=await GET(request('operating-ledger?year='+year));expect(view.status).toBe(200);expect(await db.workRecord.count({where:{kind:'operatingLedger'}})).toBe(before);
   const input={id:randomUUID(),kind:'SHIPMENT',cultivationId:cycleId,date:now,commodity:'건고추',quantityKg:50,amountWon:400000,memo:'합성 출하 전표'};
   const send=async(body:unknown,headers=session.headers)=>{const r=await POST(request('operating-ledger',body,headers));return {status:r.status,data:await r.json()}};
-  expect((await send(input,other.headers)).status).toBe(409);expect((await send(input,staff.headers)).status).toBe(403);
+  expect((await send(input,other.headers)).status).toBe(409);expect((await send(input,staff.headers)).status).toBe(200);
   expect((await send(input)).status).toBe(200);testIds.push(input.id);expect((await send(input)).status).toBe(200);expect((await send({...input,amountWon:1})).status).toBe(409);
   const correction={...input,id:randomUUID(),supersedesId:input.id,quantityKg:45,amountWon:360000,memo:'출하 중량 정정'};
   expect((await send(correction)).status).toBe(200);testIds.push(correction.id);

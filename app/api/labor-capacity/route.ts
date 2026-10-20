@@ -1,3 +1,4 @@
+import {isCenterOperator} from '@/lib/auth-policy';
 import {NextResponse} from 'next/server';
 import {z} from 'zod';
 import {createHash} from 'node:crypto';
@@ -22,7 +23,7 @@ export const GET=withAuth('labor-capacity',async()=>{
  const id=centerId(),neighbors=await geographicNeighbors(db,id),own=await db.workRecord.findUnique({where:{workspace_kind_id:rosterKey(id)}}),ops=(own?.payload??emptyLaborOps()) as unknown as LaborOps;
  const rows=(await laborCapacityRows(db)).filter(r=>{const w=r.payload as unknown as LaborCapacityWindow;return w.ownerCenterId===id||w.borrowerCenterId===id});
  const centers=await db.center.findMany(),notices=await db.workRecord.findMany({where:{workspace:recordSpace(id),kind:'laborCapacityNotice'},orderBy:{updatedAt:'desc'},take:50});
- return NextResponse.json({centerId:id,canManage:currentPrincipal()?.role==='CENTER_ADMIN',rosterVersion:own?.version??0,workers:ops.people.filter(p=>p.active&&p.employment!=='CENTER_RESERVE').map(p=>({id:p.id,name:p.name,workCodes:['*']})),neighbors:neighbors.map(n=>({id:n,name:centerDefinition(n).name})),windows:rows.map(r=>{const w=r.payload as unknown as LaborCapacityWindow;return {...w,version:r.version,bookings:centers.flatMap(c=>(c.state as unknown as State).missions.filter(m=>m.laborSupportIds?.includes(w.id)&&!isClosedTask(m.status)).map(m=>({id:m.id,label:m.label,date:m.scheduledDate,centerId:c.id,attendance:'RECONFIRM_PER_JOB'})))}}),notices:notices.map(r=>r.payload)},{headers:{'Cache-Control':'no-store'}});
+ return NextResponse.json({centerId:id,canManage:isCenterOperator(currentPrincipal()),rosterVersion:own?.version??0,workers:ops.people.filter(p=>p.active&&p.employment!=='CENTER_RESERVE').map(p=>({id:p.id,name:p.name,workCodes:['*']})),neighbors:neighbors.map(n=>({id:n,name:centerDefinition(n).name})),windows:rows.map(r=>{const w=r.payload as unknown as LaborCapacityWindow;return {...w,version:r.version,bookings:centers.flatMap(c=>(c.state as unknown as State).missions.filter(m=>m.laborSupportIds?.includes(w.id)&&!isClosedTask(m.status)).map(m=>({id:m.id,label:m.label,date:m.scheduledDate,centerId:c.id,attendance:'RECONFIRM_PER_JOB'})))}}),notices:notices.map(r=>r.payload)},{headers:{'Cache-Control':'no-store'}});
 });
 const command=z.discriminatedUnion('action',[
  z.object({action:z.literal('offer'),requestId:z.string().uuid(),rosterVersion:z.number().int().nonnegative(),window:laborCapacityInput}).strict(),

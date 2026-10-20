@@ -39,7 +39,7 @@ it('binds names to fixed future work and rejects roster conflicts without alteri
 });
 it('settings are scoped to a known center and only its administrator can write',()=>{
  expect(permitted({...testPrincipal,centerId:'janggye'},'center-settings','POST',{})).toBe(true);
- expect(permitted({...testPrincipal,role:'CENTER_STAFF',centerId:'janggye'},'center-settings','POST',{})).toBe(false);
+ expect(permitted({...testPrincipal,role:'CENTER_STAFF',centerId:'janggye'},'center-settings','POST',{})).toBe(true);
  expect(permitted({...testPrincipal,role:'SUPER_ADMIN',centerId:null},'center-settings','GET',{})).toBe(false);
  expect(centerSettingCommand.safeParse({action:'capacity',version:0,settingsVersion:0,staffCount:1.5,transportCount:1,evidence:proof}).success).toBe(false);
  expect(centerSettingCommand.safeParse({action:'capacity',version:0,settingsVersion:0,staffCount:5,transportCount:1,crewCapacity:{operators:3,workers:3},evidence:proof}).success).toBe(false);

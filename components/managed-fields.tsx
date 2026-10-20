@@ -1,6 +1,7 @@
 'use client';
+import {addressText} from '@/lib/display-language';
 import {operationalText} from '@/lib/operational-i18n';
-import {useEffect,useState} from 'react';
+import {useEffect,useRef,useState} from 'react';
 import type {State} from '@/lib/types';
 import type {ProductionItem} from '@/lib/continuous-production';
 import {cropEnglishName} from '@/lib/crop-registry';
@@ -18,6 +19,15 @@ export default function ManagedFields({state,onRefresh,onRegister}:{state:State;
  const {locale}=useLanguage(),t=(ko:string,en:string)=>locale==='ko'?ko:en,today=useKoreaDay();
  const [managedId,setManagedId]=useState<string|null>(null),[planning,setPlanning]=useState(false),[planningBusy,setPlanningBusy]=useState(false);
  const [production,setProduction]=useState<ProductionItem[]>([]),[error,setError]=useState(''),[reviewRevision,setReviewRevision]=useState(0);
+ const applyRequest=useRef<string|null>(null),[message,setMessage]=useState('');
+ async function applyIntegrated(){
+  if(planningBusy)return;setPlanningBusy(true);setError('');setMessage('');applyRequest.current??=crypto.randomUUID();
+  try{const r=await fetch('/api/integrated-planning',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'apply',requestId:applyRequest.current})}),d=await r.json();
+   if(!r.ok){if(r.status===409)applyRequest.current=null;throw Error(d.error||t('계획 적용 실패','Could not apply the plan'));}
+   applyRequest.current=null;setMessage(t(`${d.fields}필지 · ${d.assigned}작업 적용 완료${d.remaining?` · 다음 검토 ${d.remaining}필지`:''}`,`Applied ${d.fields} fields / ${d.assigned} tasks${d.remaining?` · ${d.remaining} fields remain`:''}`));
+   setReviewRevision(v=>v+1);await onRefresh();
+  }catch(e){setError(e instanceof Error?e.message:String(e))}finally{setPlanningBusy(false)}
+ }
  const fields=state.fields.filter(f=>f.serviceStatus!=='WITHDRAWN');
  const crop=(value:string)=>locale==='ko'?value:cropEnglishName(value);
  useEffect(()=>{
@@ -44,12 +54,12 @@ export default function ManagedFields({state,onRefresh,onRegister}:{state:State;
  return <div data-testid="ops-fields">
   <section className="card"><div className="card-head"><h2>{t(state.name.replace('농업지원센터','농지 지도'),'Managed field map')}</h2><Button onClick={onRegister}>＋ {t('신규 농지 등록','Register new field')}</Button></div><FieldParcelMap fields={fields}/></section>
   <section className="card section-space">
-   <div className="card-head"><h2>{t('관리 농지','Managed fields')}</h2><Button variant="outline" onClick={()=>showPlanning(true)}>{t('AI 계획·일괄 확정','AI planning / batch approval')}</Button></div>
-   {error&&<p role="alert">{t('생산계획 조회 실패: ','Could not load production plans: ')}{error}</p>}
+   <div className="card-head"><h2>{t('관리 농지','Managed fields')}</h2><Button variant="outline" disabled={planningBusy} onClick={()=>void applyIntegrated()}>{planningBusy?t('AI 계획 적용 중…','Applying AI plan…'):t('AI 계획·일괄 확정','Apply AI plans')}</Button></div>
+   {error&&<p role="alert">{operationalText(error,locale)}</p>}{message&&<p role="status">{message}</p>}
    <div className="table-wrap"><table className="managed-fields-table"><thead><tr>{[t('농지','Field'),t('면적','Area'),t('현재 작물','Current crop'),t('다음 작업','Next task'),t('계획 상태','Plan status'),t('장비 진입','Machine access'),t('관리','Manage')].map(h=><th key={h}>{h}</th>)}</tr></thead><tbody>{fields.map(f=>{
     const item=production.find(i=>i.pnu===f.id),next=state.missions.filter(m=>m.fieldId===f.id&&m.scheduledDate&&m.scheduledDate>=today&&!isClosedTask(m.status)).sort((a,b)=>a.scheduledDate!.localeCompare(b.scheduledDate!)||a.start-b.start)[0];
     return <tr key={f.id} data-testid={'managed-field-'+f.id}>
-     <td>{f.address}<br/><small>{f.name}</small></td><td>{f.area.toLocaleString()} m²</td>
+     <td>{addressText(f.address,locale)}<br/><small>{f.name}</small></td><td>{f.area.toLocaleString()} m²</td>
      <td>{!f.crop||f.serviceStatus==='CROP_REQUIRED'?t('작물 선택 대기','Awaiting crop selection'):crop(f.crop)}</td>
      <td>{next?<><time dateTime={next.scheduledDate}>{next.scheduledDate}</time><br/>{operationalText(next.label,locale)}</>:'—'}</td>
      <td>{item?productionStatusLabel(item.status,locale==='ko'):'—'}</td>

@@ -2,7 +2,7 @@ import type {Prisma} from '@prisma/client';
 import {db} from './db';
 import {centerRegistry} from './center-registry';
 import {centerId,recordSpace} from './workspace';
-import {readProductionSource,productionSourceHash,calculateProduction,lockProduction,productionKey} from './production-service';
+import {readProductionSource,productionSourceHash,calculateProduction,lockProduction,productionKey,approveProduction} from './production-service';
 import {collectJointSnapshot,evaluateJointProposal,jointRuleProposal,jointSourceHash,integratedHash,type JointEvaluation} from './integrated-plan';
 import {adviseJointPlan,type JointCompletion} from './integrated-plan-adviser';
 import {dispatchPlacementKey} from './annual-dispatch';
@@ -54,7 +54,25 @@ export async function createJointDraft(input:JointRequest,actor:string,complete?
 /** A compact, privacy-safe response. Stored private calculations never leak
  * another center's farmer, PNU, contact, operator identity or history. */
 export function jointPublicView(raw:any,currentFingerprint?:string){
- const summarize=(e:JointEvaluation)=>({id:e.id,status:e.status,metrics:e.metrics,mix:e.mix,totals:e.totals,staffing:e.staffing,equipment:e.equipment,requests:e.requests,unknowns:e.unknowns,reserved:false,approvalRequired:true});
+ const current=currentFingerprint!==undefined&&raw.fingerprint===currentFingerprint;
+ let ownCenter:string|null=null;try{ownCenter=centerId();}catch{/* A network-only principal receives no private labels. */}
+ const range=(value:{low:number;base:number;high:number}|null|undefined)=>value&&[value.low,value.base,value.high].every(Number.isFinite)?{low:value.low,base:value.base,high:value.high}:null;
+ const knownMissing=['AREA_COMMODITY_OR_HARVEST_PERIOD_REQUIRED','INVALID_ECONOMIC_REFERENCE','AMBIGUOUS_ECONOMIC_REFERENCE','CURRENT_MATCHING_ECONOMIC_REFERENCE_REQUIRED','ECONOMIC_CALCULATION_OUT_OF_RANGE','FARM_GATE_PRICE_REQUIRED_WHOLESALE_IS_NOT_RECEIPTS','VALID_EXECUTABLE_TASK_COST_BASIS_REQUIRED','ORDINARY_LABOR_POLICY_REQUIRED','OPERATOR_LABOR_POLICY_REQUIRED','REGISTERED_EQUIPMENT_RATE_REQUIRED','STATISTICAL_TOTAL_BELOW_KNOWN_OPERATIONAL_COST','CURRENT_STATISTICAL_COST_REFERENCE_REQUIRED','CURRENT_COST_REFERENCE_REQUIRED','OTHER_COSTS_INCOMPLETE','UNPLACED_REQUIRED_TASK_COSTS','OWN_LABOR_AND_CAPITAL_NOT_INCLUDED','COST_EXCLUDED'];
+ const summarize=(e:JointEvaluation)=>({id:e.id,status:e.status,metrics:e.metrics,mix:e.mix,totals:e.totals,staffing:e.staffing,equipment:e.equipment,requests:e.requests,unknowns:e.unknowns,reserved:false,approvalRequired:true,
+  fields:(e.economics??[]).filter(row=>/^F\d+$/.test(row.field)&&centerRegistry.some(c=>c.id===row.centerId)).map(row=>{
+   const own=current&&row.centerId===ownCenter;
+   const item=own?e.views.find(v=>v.centerId===ownCenter)?.view.items.find(i=>i.pnu===row.pnu):undefined;
+   const context=e.decisionContext?.fields.find(f=>f.field===row.field);
+   const baselineCrop=(raw.baseline as JointEvaluation|undefined)?.economics?.find(f=>f.field===row.field)?.crop??(raw.baseline as JointEvaluation|undefined)?.decisionContext?.fields.find(f=>f.field===row.field)?.crop??null;
+   const assessment=row.assessment,reference=assessment.reference;
+   // Deliberately construct a DTO. Never spread an economics row, source,
+   // production item or reference containing private supplier/field data.
+   return {field:row.field,centerId:row.centerId,...(item?{label:item.address||item.pnu}:{}),crop:row.crop,baselineCrop,changed:baselineCrop===null?null:baselineCrop!==row.crop,areaM2:row.areaM2,
+    context:{nationalOutlook:context?.nationalOutlook??'UNKNOWN',specialty:context?.specialty??'NOT_REVIEWED',participantSupply:context?.participantSupply??'INSUFFICIENT_DATA',neighborCompatible:context?.neighborCompatible??null},
+    economics:{status:assessment.status,comparable:assessment.comparable,revenue:range(assessment.revenue),knownCost:range(assessment.knownCost),balanceAfterKnownCosts:range(assessment.balanceAfterKnownCosts),
+     missingComponents:[...new Set(assessment.missingComponents.map(c=>c.split(':')[0]).filter(c=>knownMissing.includes(c)))],
+     reference:reference?{asOf:reference.asOf,checkedOn:reference.checkedOn,validUntil:reference.validUntil,sourceDataKind:reference.sourceDataKind,priceBasis:reference.priceBasis,priceStage:reference.priceStage,costMode:reference.costMode,...(own?{sourceUrl:reference.sourceUrl,version:reference.version}:{})}:null}};
+  })});
  return {requestId:raw.input?.requestId,audience:raw.input?.audience,status:raw.status,source:raw.source,createdAt:raw.createdAt,error:raw.error,
   freshness:currentFingerprint===undefined?'UNVERIFIED':raw.fingerprint===currentFingerprint?'CURRENT':'STALE',
   remaining:raw.remaining,excluded:raw.excluded,selected:raw.selected?summarize(raw.selected):null,baseline:raw.baseline?summarize(raw.baseline):null,
@@ -84,8 +102,31 @@ export async function stageJointDraft(tx:Prisma.TransactionClient,input:{request
  const key=productionKey('continuousProduction'),previous=(await tx.workRecord.findUnique(key))?.payload as any;
  if(previous?.integratedPlan?.requestId===input.requestId&&previous.sourceFingerprint===productionSourceHash(source))return {view:previous,alreadyStaged:true};
  const payload={...view,sourceFingerprint:productionSourceHash(source),fingerprint:integratedHash({source:productionSourceHash(source),integrated:input.requestId,previous:previous?.fingerprint}),calculatedAt:new Date().toISOString(),
-  integratedPlan:{requestId:input.requestId,evaluationId:draft.selected.id,source:draft.source,choices:own.choices,staffing:draft.selected.proposal.staffing,actor},inferenceCalled:draft.source==='NEBIUS'};
+  integratedPlan:{requestId:input.requestId,evaluationId:draft.selected.id,source:draft.source,choices:own.choices,staffing:draft.selected.proposal.staffing,actor,networkSourceHashes:sources.map(s=>[s.scopeId,productionSourceHash(s)])},inferenceCalled:draft.source==='NEBIUS'};
  await tx.workRecord.upsert({...key,create:{workspace:recordSpace(),kind:'continuousProduction',id:'current',payload:json(payload)},update:{payload:json(payload),version:{increment:1},updatedAt:new Date()}});
  await tx.audit.create({data:{centerId:id,action:'production.integrated.stage',detail:json({actor,...input,choices:own.choices,source:draft.source})}});
  return {view:payload,alreadyStaged:false};
+}
+
+/** An explicit center command covers inference, checked staging and approval.
+ * Existing consent/resource validation is unchanged. Staging and approval share
+ * one transaction, and replaying the request cannot call the model twice. */
+export async function applyJointPlan(requestId:string,actor:string,complete?:JointCompletion){
+ const audience=centerId(),key={workspace:recordSpace(),kind:'integratedApplication',id:requestId};
+ const previous=await db.workRecord.findUnique({where:{workspace_kind_id:key}});
+ if(previous){const p=previous.payload as any;if(p.actor!==actor)throw Error('다른 담당자가 사용한 요청입니다.');return {...p.result,alreadyApplied:true};}
+ const draft=await createJointDraft({requestId,mode:'AI',audience},actor,complete);
+ if(draft.source!=='NEBIUS')throw Error('AI 검토를 완료한 계획만 적용할 수 있습니다.');
+ return db.$transaction(async tx=>{
+  await lockProduction(tx);
+  const existing=await tx.workRecord.findUnique({where:{workspace_kind_id:key}});
+  if(existing){const p=existing.payload as any;if(p.actor!==actor)throw Error('다른 담당자가 사용한 요청입니다.');return {...p.result,alreadyApplied:true};}
+  const staged=await stageJointDraft(tx,{requestId,audience,fingerprint:draft.fingerprint},actor);
+  const pnus=staged.view.integratedPlan.choices.map((c:{pnu:string})=>c.pnu);
+  if(!pnus.length)throw Error('확정할 신규 농지 계획이 없습니다.');
+  const approved=await approveProduction(tx,{requestId,fingerprint:staged.view.fingerprint,pnus},actor);
+  const result={...approved,remaining:draft.remaining??0,requestId,source:draft.source};
+  await tx.workRecord.create({data:{...key,payload:json({actor,result,appliedAt:new Date().toISOString()})}});
+  return result;
+ },{timeout:60000});
 }

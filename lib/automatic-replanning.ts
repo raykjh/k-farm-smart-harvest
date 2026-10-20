@@ -18,7 +18,7 @@ type Call=(body:Record<string,unknown>)=>Promise<any>;
  * The server still verifies the model, then revalidates and commits atomically.
  * UI simplicity never removes the evidence retained in planningDecision. */
 export async function runAutomaticReplan(input:ReplanInput,requestId:string,invoke:Call,liveAi:boolean,needs:()=>Promise<ResolutionNeed[]>,beforeCommit?:(proposalId:string,result:AutomaticReplanResult)=>Promise<void>):Promise<AutomaticReplanResult>{
- const compared=await invoke({...input,action:'compare',useAi:liveAi,searchMode:'LOCAL_FIRST',alternatives:automaticSearchSteps});
+ const compared=await invoke({...input,action:'compare',useAi:liveAi,searchMode:input.resourceReview?undefined:'LOCAL_FIRST',...(input.resourceReview?{decisionPriority:'MIN_EXTERNAL'}:{}),alternatives:automaticSearchSteps});
  const recommendation=compared.recommendation;
  const choice=compared.results.find((c:any)=>c.id===recommendation?.alternativeId&&c.status==='FEASIBLE');
  if(!choice){

@@ -73,3 +73,13 @@ it('never searches manual replacement in the ordinary automatic flow',()=>{
  expect(automaticSearchSteps.map(s=>s.id)).toEqual(['preserve','expand','adjacent']);
  expect(automaticSearchSteps.some(s=>s.manualFallback)).toBe(false);
 });
+
+it('resource changes compare keep/local/adjacent options without stopping at the first feasible schedule',async()=>{
+ const invoke=vi.fn(async(b:any)=>{
+  if(b.action==='compare'){expect(b.searchMode).toBeUndefined();expect(b).toMatchObject({resourceReview:true,decisionPriority:'MIN_EXTERNAL',useAi:true});return {recommendation:{alternativeId:'preserve',source:'NEBIUS',rationaleCheck:{status:'VERIFIED'}},results:[{id:'preserve',status:'FEASIBLE',previewRequest:{action:'preview'},result:{}}]};}
+  if(b.action==='preview')return {status:'FEASIBLE',proposalId:'same-plan',diff:[],assignments:[]};
+  return {ok:true};
+ });
+ expect(await runAutomaticReplan({ids:['a'],resourceReview:true},'review',invoke,true,async()=>[])).toMatchObject({status:'APPLIED',source:'NEBIUS',changes:0});
+ expect(invoke.mock.calls.map(c=>c[0].action)).toEqual(['compare','preview','approve']);
+});

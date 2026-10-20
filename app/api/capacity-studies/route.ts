@@ -1,3 +1,4 @@
+import {isCenterOperator} from '@/lib/auth-policy';
 import {NextResponse} from 'next/server';
 import {z,ZodError} from 'zod';
 import {withAuth} from '@/lib/auth-route';
@@ -13,7 +14,7 @@ export const GET=withAuth('capacity-studies',async req=>{
   try{return NextResponse.json(requireProviderArtifact('capacityStudy'),{headers:{'Cache-Control':'no-store'}});}
   catch(error){if(error instanceof ProviderArtifactError)return NextResponse.json({error:error.message,code:error.code},{status:503});throw error;}
  }
- return NextResponse.json({items:await listCapacityStudies(),comparisons:await listCapacityComparisons(),crops:workloadCrops,equipment:workloadEquipment,sources:workloadSources,version:WORKLOAD_CATALOG_VERSION,canSave:currentPrincipal()?.role!=='CENTER_STAFF',inferenceCalled:false});
+ return NextResponse.json({items:await listCapacityStudies(),comparisons:await listCapacityComparisons(),crops:workloadCrops,equipment:workloadEquipment,sources:workloadSources,version:WORKLOAD_CATALOG_VERSION,canSave:(isCenterOperator(currentPrincipal())||currentPrincipal()?.role==='SUPER_ADMIN'),inferenceCalled:false});
 });
 export const POST=withAuth('capacity-studies',async req=>{
  try{

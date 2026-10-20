@@ -18,6 +18,6 @@ it('session center wins over URL workspaces and background contexts, including c
  expect(()=>asPrincipal({...testPrincipal,role:'SUPER_ADMIN',centerId:null},recordSpace)).toThrow();
 });
 it('all four centers have empty starting ledgers and cannot access legacy demonstrations or other roles',()=>{
- for(const c of centerRegistry){const s=emptyCenter(c.id),p={...testPrincipal,centerId:c.id};expect(s.machines).toHaveLength(0);expect(s.staffCount).toBe(0);expect(permitted(p,'fields','GET',null)).toBe(true);expect(permitted({...p,role:'CENTER_STAFF'},'center-resources','POST',{})).toBe(false);if(c.id!=='demo')expect(permitted(p,'demo-data','POST',{})).toBe(false)}
+ for(const c of centerRegistry){const s=emptyCenter(c.id),p={...testPrincipal,centerId:c.id};expect(s.machines).toHaveLength(0);expect(s.staffCount).toBe(0);expect(permitted(p,'fields','GET',null)).toBe(true);expect(permitted({...p,role:'CENTER_STAFF'},'center-resources','POST',{})).toBe(true);if(c.id!=='demo')expect(permitted(p,'demo-data','POST',{})).toBe(false)}
  expect(new Set(centerRegistry.map(c=>c.prefix)).size).toBe(4);
 });

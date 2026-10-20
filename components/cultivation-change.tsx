@@ -1,4 +1,5 @@
 'use client';
+import {machineText} from '@/lib/display-language';
 import {cropCodes,cropDisplayNames,type SupportedCropCode} from '@/lib/crop-registry';
 import {useState} from 'react';
 import {useLanguage} from './language';
@@ -36,8 +37,8 @@ export default function CultivationChange({id,crop,area,onSaved,expanded=false,r
    {draft.impact&&<section aria-label={t('변경 영향','Change impact')}>
     <p>{t('완료 보존','Completed kept')} {draft.impact.preserved.length} · {t('예정 작업 교체','Future replaced')} {draft.impact.removed.length} · {t('예약','Reservations')} {draft.impact.reservations.length} · {t('인력 모집','Labor jobs')} {draft.impact.labor.length}</p>
     <details><summary>{t('영향 내역','Impact details')}</summary>
-     {draft.impact.preserved.map((m:any)=><p key={m.id}>{t('보존','Keep')} · {m.date} · {m.name}</p>)}
-     {draft.impact.removed.map((m:any)=><p key={m.id}>{t('기존 일정 해제','Release')} · {m.date} · {m.name} · {m.resourceId??t('인력','Labor')}</p>)}
+     {draft.impact.preserved.map((m:any)=><p key={m.id}>{t('보존','Keep')} · {m.date} · {machineText(m,locale)}</p>)}
+     {draft.impact.removed.map((m:any)=><p key={m.id}>{t('기존 일정 해제','Release')} · {m.date} · {machineText(m,locale)} · {m.resourceId??t('인력','Labor')}</p>)}
      {draft.impact.reservations.map((r:any)=><p key={r.id}>{r.resourceId} · {r.from} ~ {r.to}</p>)}
      {draft.impact.labor.map((j:any)=><p key={j.id}>{j.date} · {t('배정 인력','Assigned workers')}: {j.assigned.join(', ')||'—'}</p>)}
      {draft.dispatch.assignments.map((a:any)=><p key={a.taskId}>{t('변경 후','After')} · {a.date} · {a.machineId??a.owner} · {a.durationMinutes}{t('분',' min')}</p>)}

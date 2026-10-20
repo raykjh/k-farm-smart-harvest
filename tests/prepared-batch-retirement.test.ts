@@ -1,0 +1,11 @@
+import {expect,it} from 'vitest';
+import {preparedFixture} from './prepared-batch-fixture';
+import {planPreparedBatch} from '../lib/prepared-batch-retirement';
+import {permitted} from '../lib/auth-policy';
+import {testPrincipal} from './auth-fixture';
+it('selects only the sealed batch and retains shared equipment, workers and other fields',()=>{const f=preparedFixture(),p=planPreparedBatch(f.snapshot,'demo',f.batchId);expect(p.safe,JSON.stringify(p.blockers)).toBe(true);expect(p.counts).toMatchObject({fields:1,tasks:1,reservations:1,laborJobs:1,patchedRecords:3});expect(p.fieldIds).toEqual([f.pnu]);expect(p.records.map(r=>JSON.parse(r).kind)).not.toContain('centerSettings');});
+it('blocks actual work, cross-center links and unknown descendants without widening ownership',()=>{
+ for(const [workspace,kind,payload,code] of [['sandbox','operatingLedger',{cultivationId:'CYCLE',source:'ACTUAL'},'ACTUAL_EVIDENCE'],['center:janggye','equipmentWorkOrder',{taskId:'TASK'},'FOREIGN_DEPENDENCY'],['sandbox','unknownFutureKind',{pnu:'PNU'},'UNKNOWN_DEPENDENCY']] as const){const f=preparedFixture();f.snapshot.records.push(JSON.stringify({workspace,kind,id:'extra',payload:JSON.parse(JSON.stringify(payload).replace('CYCLE',f.cycle).replace('TASK',f.mission).replace('PNU',f.pnu))}));const p=planPreparedBatch(f.snapshot,'demo',f.batchId);expect(p.safe).toBe(false);expect(p.blockers.some(b=>b.code===code)).toBe(true);}
+});
+it('blocks mixed ownership and completed worker attendance',()=>{const f=preparedFixture();const l=f.records.find(r=>r.kind==='laborOperations')!;(l.payload as any).jobs[0].worked=['worker'];f.snapshot.records=f.records.map(r=>JSON.stringify(r));expect(planPreparedBatch(f.snapshot,'demo',f.batchId).blockers).toContainEqual({code:'ACTUAL_LABOR',kind:'laborOperations',count:1});});
+it('restricts input maintenance to enabled global non-judge administrators',()=>{expect(permitted({...testPrincipal,role:'SUPER_ADMIN',centerId:null},'prepared-inputs','POST',{})).toBe(true);for(const p of [testPrincipal,{...testPrincipal,role:'SUPER_ADMIN' as const,judgeAccount:true as const},{...testPrincipal,role:'SUPER_ADMIN' as const,enabled:false}])expect(permitted(p,'prepared-inputs','POST',{})).toBe(false);});

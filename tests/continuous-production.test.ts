@@ -72,13 +72,13 @@ describe('incremental continuous production',()=>{
   expect(()=>serviceTerm.parse({from:'2026-09-28',until:null,continuousConsent:false})).toThrow();
   const p=cropPeriod('rice',criteria().profiles[0].context,'2027-01-05',null);expect(p.start).toBe('2027-01-05');expect(p.end).toBe('2027-02-28');expect(p.context.operations!.rice!.plant.to).toBe('2027-02-28');
  });
- it('lets staff confirm only validated AI drafts without extending consent or other-center permissions',()=>{
+ it('lets both center roles review saved plans without extending consent or other-center permissions',()=>{
   const p={id:'test',username:'test',name:'test',role:'CENTER_STAFF' as const,centerId:'demo',enabled:true};
   expect(permitted(p,'continuous-production','POST',{action:'refresh'})).toBe(true);expect(permitted(p,'continuous-production','POST',{action:'approve'})).toBe(true);expect(permitted({...p,role:'CENTER_ADMIN'},'continuous-production','POST',{action:'approve'})).toBe(true);expect(permitted({...p,centerId:'other'},'continuous-production','GET',null)).toBe(false);
-  for(const action of ['criteria','participation','ai-review','rule-review'])expect(permitted(p,'continuous-production','POST',{action})).toBe(false);
-  const ai={inferenceCalled:true,integratedPlan:{source:'NEBIUS'}};
+  for(const action of ['criteria','participation','ai-review','rule-review'])expect(permitted(p,'continuous-production','POST',{action})).toBe(true);
+  const ai={inferenceCalled:true,integratedPlan:{source:'NEBIUS'},items:[{status:'REVIEW',proposal:{}}]};
   expect(canConfirmProduction(p,ai)).toBe(true);
-  for(const view of [null,{}, {...ai,inferenceCalled:false},{...ai,integratedPlan:{source:'RULES'}},{...ai,aiReviewError:{message:'failed'}}])expect(canConfirmProduction(p,view)).toBe(false);
+  for(const view of [null,{}, {items:[]},{...ai,aiReviewError:{message:'failed'}}])expect(canConfirmProduction(p,view)).toBe(false);
   expect(canConfirmProduction({...p,centerId:'other'},ai)).toBe(false);
   expect(canConfirmProduction({...p,role:'SUPER_ADMIN'},ai)).toBe(false);
   expect(canConfirmProduction({...p,enabled:false},ai)).toBe(false);

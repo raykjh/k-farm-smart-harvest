@@ -8,7 +8,10 @@ export const INPUT_USD_PER_MILLION=0.06;
 export const OUTPUT_USD_PER_MILLION=0.24;
 export const TOTAL_MICRO_USD=20_000_000; // Leave $5 of the verified $25 untouched.
 export const DAILY_MICRO_USD=null; // Removed explicitly by the user on 2026-10-11.
-export const MAX_REQUEST_RESERVATION_MICRO_USD=10_000; // Current bounded request is < $0.01.
+export const MAX_REQUEST_RESERVATION_MICRO_USD=500_000; // User-approved per-call ceiling, 2026-10-20.
+export const DEVELOPMENT_PRIMARY_CEILING_MICRO_USD=10_000_000;
+export const MAX_PLANNING_OUTPUT_TOKENS=131_072;
+export const JOINT_PLAN_OUTPUT_TOKENS=32_768;
 // Rates rechecked on the official public model page on 2026-10-19 (not balance).
 // https://nebius.com/services/token-factory/models/nvidia-nemotron-models-inference
 // Bounded judging-period review, not a price/uptime guarantee or extra allowance.
@@ -24,6 +27,16 @@ export type AiPurpose='schedule-decision'|'crop-decision'|'connection-check'|'re
 export type AiRequestProfile='production'|'planning'|'diagnostic';
 export type AiUsage={callId:string;reservedMicroUsd:number;promptTokens?:number;completionTokens?:number;estimatedMicroUsd?:number};
 
+// Count all historical account reservations toward the development threshold.
+// Judging is an explicit server setting; no request body can select this phase.
+// Both phases still obey the existing decision slice and lifetime allowance.
+export function effectivePrimaryCeiling(){
+ const phase=process.env.KFARM_AI_SPENDING_PHASE||'development';
+ if(phase==='development')return Math.min(TOTAL_MICRO_USD,DEVELOPMENT_PRIMARY_CEILING_MICRO_USD);
+ if(phase==='judging')return TOTAL_MICRO_USD;
+ throw Error('Invalid AI spending phase');
+}
+
 // Optional server-side stop for a separately approved verification slice. It can
 // only LOWER the existing persistent ceiling, never reset or enlarge an allowance.
 export function effectiveValidationCeiling(){
@@ -36,7 +49,8 @@ export function effectiveValidationCeiling(){
 export function validateRequest(body:Record<string,unknown>,profile:AiRequestProfile='production'){
  if(!['production','planning','diagnostic'].includes(profile))throw new Error('Unknown AI request profile');
  if(body.model!==APPROVED_MODEL)throw new Error('AI model not approved for this budget');
- if(!Number.isInteger(body.max_tokens)||Number(body.max_tokens)<1||Number(body.max_tokens)>(profile==='production'?1200:4096))throw new Error('AI output limit exceeded');
+ const outputLimit=profile==='planning'?MAX_PLANNING_OUTPUT_TOKENS:profile==='diagnostic'?4096:1200;
+ if(!Number.isInteger(body.max_tokens)||Number(body.max_tokens)<1||Number(body.max_tokens)>outputLimit)throw new Error('AI output limit exceeded');
  if(body.n!==undefined&&body.n!==1)throw new Error('Multiple AI completions are disabled');
  if(body.stream!==undefined&&body.stream!==false)throw new Error('Streaming is disabled for usage accounting');
  if(body.reasoning_effort!==undefined&&body.reasoning_effort!=='none'&&!(profile!=='production'&&body.reasoning_effort==='low'))throw new Error('Unreviewed reasoning budget');
@@ -73,6 +87,7 @@ export async function reserveBudget(amount:number){
  if(!Number.isSafeInteger(amount)||amount<1||amount>MAX_REQUEST_RESERVATION_MICRO_USD)throw new Error('Invalid AI budget reservation');
  await assertJudgeAiLedgerReady();
  const ceiling=effectiveValidationCeiling();
+ const primaryCeiling=effectivePrimaryCeiling();
  // Provisioned with the database schema, never auto-created/reset by a request.
  return aiBudgetDb().$transaction(async tx=>{
   await tx.$executeRaw`INSERT INTO "AiBudget" ("id","total","daily","day") VALUES ('nebius-primary',0,0,CURRENT_DATE) ON CONFLICT DO NOTHING`;
@@ -80,8 +95,8 @@ export async function reserveBudget(amount:number){
    "total"="total"+${amount},
    "daily"=(CASE WHEN "day"=CURRENT_DATE THEN "daily" ELSE 0 END)+${amount},
    "day"=CURRENT_DATE
-   WHERE "id"='nebius-primary' AND "total"+${amount}<=${TOTAL_MICRO_USD}`;
-  if(changed!==1)throw new Error('AI budget exhausted: request blocked before network call');
+   WHERE "id"='nebius-primary' AND "total"+${amount}<=${primaryCeiling}`;
+  if(changed!==1)throw new Error(`AI budget exhausted: $${(primaryCeiling/1e6).toFixed(2)} cumulative reservation ceiling reached; request blocked before network call`);
   await tx.$executeRaw`INSERT INTO "AiBudget" ("id","total","daily","day") VALUES (${VALIDATION_BUDGET_ID},0,0,CURRENT_DATE) ON CONFLICT DO NOTHING`;
   const validation=await tx.$executeRaw`UPDATE "AiBudget" SET "total"="total"+${amount},"daily"="daily"+${amount}
    WHERE "id"=${VALIDATION_BUDGET_ID} AND "total"+${amount}<=${ceiling}`;

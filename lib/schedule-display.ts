@@ -1,8 +1,9 @@
+import {equipmentText} from './display-language';
 import type {Mission,State,Machine} from './types';
 
 export function equipmentLabel(machine:Machine|undefined,id:string,ko=true){
  const model=(machine as Machine&{ledger?:{model?:string}}|undefined)?.ledger?.model?.trim();
- const name=machine?.name?.trim();
+ const name=equipmentText(machine?.name?.trim(),ko?'ko':'en');
  return model&&name&&model!==name?`${model} (${name})`:model||name||`${ko?'장비':'Equipment'} (${id})`;
 }
 export function taskResourceLabel(state:State,m:Pick<Mission,'resourceId'>,ko=true){
@@ -11,7 +12,7 @@ export function taskResourceLabel(state:State,m:Pick<Mission,'resourceId'>,ko=tr
 type ScheduleSnapshot={date:string|null;resource:string;resourceId:string|null;minutes:number;startMinute?:number};
 export type ScheduleChangeRow={id:string;field:string;crop:string;task:string;before:ScheduleSnapshot;after:ScheduleSnapshot;changed:('date'|'equipment'|'time'|'added')[]};
 export function changedResourceLabel(value:ScheduleSnapshot,other:ScheduleSnapshot,ko=true){
- const label=value.resource==='인력'?(ko?'인력':'Labor'):value.resource;
+ const label=value.resource==='인력'?(ko?'인력':'Labor'):equipmentText(value.resource,ko?'ko':'en');
  return value.resourceId&&value.resourceId!==other.resourceId&&value.resource===other.resource?`${label} · ${value.resourceId}`:label;
 }
 export function scheduleTimeLabel(value:ScheduleSnapshot,ko=true){

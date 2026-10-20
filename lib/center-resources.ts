@@ -5,6 +5,7 @@ import type {State} from './types';
 import {centerRegistry,knownCenter} from './center-registry';
 import {validateLoan,machineAvailableToCenter,type EquipmentLoan} from './center-sharing';
 import {isClosedTask} from './task-lifecycle';
+import {isCenterOperator} from './auth-policy';
 import {recordSpace} from './workspace';
 import {geographicNeighbors} from './center-adjacency';
 import type {SharingOffer,ResourceBlock} from './equipment-sharing-offers';
@@ -73,12 +74,10 @@ export async function assertResourceBooking(tx:Prisma.TransactionClient,centerId
 }
 export async function saveLoan(tx:Prisma.TransactionClient,input:unknown,actor:Principal,reason?:string){
  const b=loanInput.parse(input);
- const staffRequest=actor.role==='CENTER_STAFF'&&b.version===0&&b.status==='REQUESTED'&&b.borrowerCenterId===actor.centerId;
- if(!knownCenter(actor.centerId)||(actor.role!=='CENTER_ADMIN'&&!staffRequest))throw Error('센터 관리자 권한 필요');
+ if(!isCenterOperator(actor))throw Error('센터 담당자 권한 필요');
  await lockCenterPool(tx);
  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`kfarm-resource:${b.machineId}`},0))`;
  const previous=await tx.workRecord.findUnique({where:{workspace_kind_id:key(b.id)}}),old=previous?.payload as unknown as EquipmentLoan|undefined;
- if(staffRequest&&previous)throw Error('센터 담당자는 신규 차용 요청만 등록할 수 있습니다.');
  if((previous?.version??0)!==b.version)throw Error('대여 내용이 변경되었습니다. 다시 확인하세요.');
  if(old&&['machineId','ownerCenterId','borrowerCenterId'].some(k=>(old as any)[k]!== (b as any)[k]))throw Error('대여의 장비·센터 식별자는 변경할 수 없습니다.');
  if(old?.status==='CANCELLED'||old?.status==='RETURNED')throw Error('종료한 대여는 새 요청으로 접수하세요.');

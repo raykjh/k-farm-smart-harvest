@@ -12,11 +12,11 @@ import {seedProductionCropReview,productionCropRegistration} from '../scripts/fi
 import {permitted} from '../lib/auth-policy';
 
 afterEach(()=>{vi.restoreAllMocks();vi.unstubAllEnvs();completion.mockReset()});
-it('keeps paid crop review and rule reset restricted to the owning center administrator',()=>{
+it('allows both center roles to review and reset only within their own center',()=>{
  const staff={id:'test',name:'test',username:'test',role:'CENTER_STAFF',centerId:'demo'} as any;
  expect(permitted(staff,'continuous-production','POST',{action:'refresh'})).toBe(true);
  for(const action of ['ai-review','rule-review']){
-  expect(permitted(staff,'continuous-production','POST',{action})).toBe(false);
+  expect(permitted(staff,'continuous-production','POST',{action})).toBe(true);
   expect(permitted({...staff,role:'CENTER_ADMIN'},'continuous-production','POST',{action})).toBe(true);
   expect(permitted({...staff,role:'CENTER_ADMIN',centerId:null},'continuous-production','POST',{action})).toBe(false);
  }

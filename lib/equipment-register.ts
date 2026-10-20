@@ -16,14 +16,16 @@ export function applyEquipmentEdit(state:State,input:EquipmentInput,existingId?:
  if(!old&&!input.id.includes(input.kind))throw Error('장비코드에 선택한 종류 코드가 필요합니다. 예: JB23TR03');
  const oldKind=old?.ledger?.kind??equipmentTypes.find(t=>old?.id.includes(t[0]))?.[0];
  const type=old&&oldKind===input.kind?old.type:equipmentTypes.find(t=>t[0]===input.kind)![1];
+ const returning=old?.status==='MAINTENANCE'&&input.status==='AVAILABLE'&&!old.safetyLock;
  const busy=old&&s.missions.some(m=>m.resourceId===old.id&&!isClosedTask(m.status));
  const compatibleCrops=input.compatibleCrops??old?.compatibleCrops;
  if(busy&&JSON.stringify([...(compatibleCrops??[])].sort())!==JSON.stringify([...(old?.compatibleCrops??[])].sort()))throw Error('미완료 배정 작업이 있습니다. 호환 작물 변경 전 예약·재계획을 확인하세요.');
- if(old&&busy&&(old.type!==type||old.capacityHaHour!==input.capacityHaHour||old.status!==input.status))throw Error('미완료 배정 작업이 있습니다. 예약·재계획에서 조정한 뒤 운용 조건을 변경하세요.');
+ if(old&&busy&&(old.type!==type||old.capacityHaHour!==input.capacityHaHour||old.status!==input.status&&!returning))throw Error('미완료 배정 작업이 있습니다. 예약·재계획에서 조정한 뒤 운용 조건을 변경하세요.');
  const defaultOperatorId=input.defaultOperatorId;
  if(defaultOperatorId&&!state.operatorRoster?.some(p=>p.id===defaultOperatorId&&p.active&&p.kinds.includes(input.kind)))throw Error('선택한 장비 종류를 운용할 수 있는 등록 담당자를 선택하세요.');
  const {id,name,capacityHaHour,status,...ledger}=input;
  const value:LedgerMachine={...old,id,name,capacityHaHour,status,type,defaultOperatorId,ownerCenterId:old?.ownerCenterId??owner,safetyLock:old?.safetyLock??false,ledger,...(compatibleCrops?{compatibleCrops}:{})};
+ if(returning&&value.downtimes){const today=new Date(Date.now()+9*3600000).toISOString().slice(0,10);value.downtimes=value.downtimes.map(p=>p.from<=today&&today<p.returnOn?{...p,returnOn:today}:p).filter(p=>p.from<p.returnOn);}
  if(old)s.machines=s.machines.map(m=>m.id===id?value:m);else s.machines.push(value);
  s.planVersion++;return s;
 }

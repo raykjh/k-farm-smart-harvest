@@ -1,5 +1,5 @@
 import {isClosedTask} from './task-lifecycle';
-import {executionStatus,type ExecutionView} from './execution-view';
+import {executionStatusLookup,type ExecutionView} from './execution-view';
 import type {State,Mission} from './types';
 
 export type ReportEvidence=ExecutionView & {missionSnapshot?:Mission;fieldSnapshot?:{id:string;address:string;areaM2:number}|null;recordId:string;version:number;updatedAt:string;actualStartedAt?:string|null;actualFinishedAt?:string|null;simulatedStartedAt?:string|null;confirmedBy?:string;confirmedAt?:string;ruleVersion?:string;stationId?:string;sourceBatchId?:string|null};
@@ -10,12 +10,15 @@ export function reportMissions(state:State,evidence:ReportEvidence[]){
 }
 export function buildWorkReport(state:State,evidence:ReportEvidence[],today:string){
  const missions=reportMissions(state,evidence);
+ const fields=new Map<string,State['fields'][number]>(),byMission=new Map<string,Map<string|undefined,ReportEvidence>>();
+ for(const field of state.fields)if(!fields.has(field.id))fields.set(field.id,field);
+ for(const e of evidence){let dates=byMission.get(e.missionId);if(!dates)byMission.set(e.missionId,dates=new Map());if(!dates.has(e.plannedDate))dates.set(e.plannedDate,e);}
+ const executionStatus=executionStatusLookup(state,evidence);
  const rows=missions.map(m=>{
-  const field=state.fields.find(f=>f.id===m.fieldId);
-  const matching=evidence.filter(e=>e.missionId===m.id&&e.plannedDate===m.scheduledDate);
-  const e=matching[0];
+  const field=fields.get(m.fieldId);
+  const e=byMission.get(m.id)?.get(m.scheduledDate);
   const simulated=field?.source==='DEMO_ASSUMPTION'||e?.source==='DEMO_SIMULATION';
-  const status=!field&&e?(['COMPLETED','SIMULATED_COMPLETED'].includes(e.assessment)?'COMPLETED':['HELD','SIMULATED_HELD'].includes(e.assessment)?'HELD':executionStatus(state,m,evidence)):executionStatus(state,m,evidence);
+  const status=!field&&e?(['COMPLETED','SIMULATED_COMPLETED'].includes(e.assessment)?'COMPLETED':['HELD','SIMULATED_HELD'].includes(e.assessment)?'HELD':executionStatus(m)):executionStatus(m);
   const finishedAt=simulated?e?.simulatedFinishedAt:e?.actualFinishedAt;
   const startedAt=simulated?e?.simulatedStartedAt:e?.actualStartedAt;
   const confirmed=status==='COMPLETED'&&!!finishedAt&&Number.isFinite(Date.parse(finishedAt))&&finishedAt.slice(0,10)<=today&&(simulated||!!(e?.confirmedBy&&e.confirmedAt));

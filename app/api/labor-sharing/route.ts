@@ -1,3 +1,4 @@
+import {isCenterOperator} from '@/lib/auth-policy';
 import {NextResponse} from 'next/server';
 import {z} from 'zod';
 import {createHash} from 'node:crypto';
@@ -22,7 +23,7 @@ export const GET=withAuth('labor-sharing',async()=>{
  const rosters=await db.workRecord.findMany({where:{kind:'laborOperations',id:'current',workspace:{in:neighbors.map(c=>recordSpace(c))}}});
  const jobs=rosters.flatMap(r=>{const owner=neighbors.find(c=>recordSpace(c)===r.workspace)!;return (r.payload as unknown as LaborOps).jobs.filter(j=>j.status==='OPEN').map(j=>({centerId:owner,centerName:centerDefinition(owner).name,jobId:j.id,sourceHash:j.sourceHash,date:j.date,startMinute:j.startMinute,durationMinutes:j.durationMinutes,task:j.task,address:j.address,pay:j.pay,shortage:Math.max(0,j.count-j.assigned.length-offers.filter(s=>s.borrowerCenterId===owner&&s.jobId===j.id&&s.status==='ASSIGNED').length)})).filter(j=>j.shortage>0&&Date.parse(j.date+'T00:00:00+09:00')+j.startMinute*60000>Date.now())});
  const notices=await db.workRecord.findMany({where:{workspace:recordSpace(id),kind:'laborShareNotice'},orderBy:{updatedAt:'desc'},take:50});
- return NextResponse.json({centerId:id,canManage:currentPrincipal()?.role==='CENTER_ADMIN',version:own?.version??0,workers:ops.people.filter(p=>p.active&&p.employment!=='CENTER_RESERVE').map(p=>({id:p.id,name:p.name})),jobs,offers:offers.filter(s=>s.ownerCenterId===id||s.borrowerCenterId===id),notices:notices.map(r=>r.payload)});
+ return NextResponse.json({centerId:id,canManage:isCenterOperator(currentPrincipal()),version:own?.version??0,workers:ops.people.filter(p=>p.active&&p.employment!=='CENTER_RESERVE').map(p=>({id:p.id,name:p.name})),jobs,offers:offers.filter(s=>s.ownerCenterId===id||s.borrowerCenterId===id),notices:notices.map(r=>r.payload)});
 });
 const command=z.discriminatedUnion('action',[
  z.object({action:z.literal('offer'),requestId:z.string().uuid(),version:z.number().int().nonnegative(),borrowerCenterId:z.string().min(1),jobId:z.string().min(1),sourceHash:z.string().min(1),workerId:z.string().uuid(),response:z.enum(['APP','SMS','PHONE']),travelMinutes:z.number().int().min(0).max(240),distanceKm:z.number().min(0).max(300),consent:z.literal(true)}).strict(),

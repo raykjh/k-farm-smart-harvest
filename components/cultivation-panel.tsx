@@ -1,4 +1,5 @@
 'use client';
+import {addressText} from '@/lib/display-language';
 import {cropCodes,cropDisplayNames,isLegacyCrop,type SupportedCropCode} from '@/lib/crop-registry';
 import CultivationChange from './cultivation-change';
 import {useEffect,useState} from 'react';
@@ -60,7 +61,7 @@ function LegacyCultivationPanel({onSaved,fieldId}:{onSaved?:()=>Promise<void>;fi
   </div>}
   {formVisible&&<fieldset disabled={busy} className="field-crop-create">
    <div className={fieldId?'field-crop-form':'actions'}>
-    {!fieldId&&<label>{t('농지','Field')}<select value={pnu} onChange={e=>{setPnu(e.target.value);setPrevious('');setPlant('');setPreview(null);const f=fields.find(f=>f.pnu===e.target.value);setContext({region:f?.conditions?.region??''});if(f?.crop)setCrop(f.crop)}}><option value="">{t('농지 선택','Select field')}</option>{fields.map(f=><option key={f.pnu} value={f.pnu}>{f.address}</option>)}</select></label>}
+    {!fieldId&&<label>{t('농지','Field')}<select value={pnu} onChange={e=>{setPnu(e.target.value);setPrevious('');setPlant('');setPreview(null);const f=fields.find(f=>f.pnu===e.target.value);setContext({region:f?.conditions?.region??''});if(f?.crop)setCrop(f.crop)}}><option value="">{t('농지 선택','Select field')}</option>{fields.map(f=><option key={f.pnu} value={f.pnu}>{addressText(f.address,locale)}</option>)}</select></label>}
     <label>{t('작물','Crop')}<select value={crop} onChange={e=>{setCrop(e.target.value);setPlant('');setPreview(null);setContext({region:context.region});}}>{fieldId&&<option value="">{t('작물을 선택해주세요','Select a crop')}</option>}{cropCodes.map(v=><option key={v} value={v}>{names[v]}</option>)}</select></label>
     <label>{t('재배 시작','Period start')}<input type="date" value={start} onChange={e=>setStart(e.target.value)}/></label>
     <label>{t('정리 완료 예정','Expected period end')}<input type="date" value={end} onChange={e=>setEnd(e.target.value)}/></label>

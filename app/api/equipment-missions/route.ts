@@ -1,3 +1,4 @@
+import {isCenterOperator} from '@/lib/auth-policy';
 import {NextResponse} from 'next/server';
 import {z} from 'zod';
 import {db} from '@/lib/db';
@@ -35,7 +36,7 @@ export const GET=withAuth('equipment-missions',async()=>{
    return {groupId,sourceId:g.sourceId,fieldId:g.fieldId,label:g.members[0].label.replace(/ \(분할 \d+\/\d+\)$/,''),editable:g.editable,parent,saved,...review,members:g.members.map(m=>({id:m.id,part:m.equipmentSplit!.part,label:m.label,date:m.scheduledDate,status:m.status,frozen:immovable(m),areaHa:m.equipmentWork!.areaHa}))};
   }catch(e){return {groupId,editable:false,ready:false,reason:e instanceof Error?e.message:'분할 구역 검토 필요',members:[]};}
  });
- return NextResponse.json({canManage:currentPrincipal()?.role==='CENTER_ADMIN',areas,groups,legacyGroups:s.state?legacyWorkGroups(s.state):[],fields:s.state?.fields.map(f=>({id:f.id,address:f.address,machineAccess:f.machineAccess}))??[],tasks:s.state?.missions.filter(m=>m.resourceId&&!m.resourceOccupancyOnly&&!['CANCELLED','COMPLETED'].includes(m.status)).map(m=>{
+ return NextResponse.json({canManage:isCenterOperator(currentPrincipal()),areas,groups,legacyGroups:s.state?legacyWorkGroups(s.state):[],fields:s.state?.fields.map(f=>({id:f.id,address:f.address,machineAccess:f.machineAccess}))??[],tasks:s.state?.missions.filter(m=>m.resourceId&&!m.resourceOccupancyOnly&&!['CANCELLED','COMPLETED'].includes(m.status)).map(m=>{
   const check=missionPacket(s.state!,centerId(),m.id,areas.find(a=>a.pnu===m.fieldId)??null,s.reservations,today(),splitAreas),stored=packets.find(r=>(r.payload as any).missionId===m.id)?.payload as any;
   return {id:m.id,label:m.label,fieldId:m.fieldId,date:m.scheduledDate,equipmentId:m.resourceId,...check,status:stored?(stored.fingerprint!==check.fingerprint||!check.ready?'STALE':stored.status):'NOT_PREPARED'};
  })??[]});

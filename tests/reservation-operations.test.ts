@@ -4,7 +4,7 @@ import {migrateReservations,cancelLinkedReservation} from '../lib/reservation-op
 import type {Principal} from '../lib/auth';
 it('previews then migrates idempotently and cancels future work without deleting history',async()=>{
  const id='operations-test-'+crypto.randomUUID(),booking='plan:'+id+':task';
- const actor={id:'tester',role:'CENTER_ADMIN',centerId:id} as Principal;
+ const actor={id:'tester',enabled:true,role:'CENTER_ADMIN',centerId:id} as Principal;
  const state={planVersion:1,revisions:[],fields:[{id:'field',farmerId:'farmer'}],machines:[],missions:[{id:'task',fieldId:'field',label:'방제',resourceId:id,scheduledDate:'2099-05-01',start:0,duration:4,status:'PLANNED'},{id:'past',fieldId:'field',label:'완료',resourceId:id,scheduledDate:'2026-01-01',start:0,duration:4,status:'COMPLETED'}]};
  try{
  await db.center.create({data:{id,state}});

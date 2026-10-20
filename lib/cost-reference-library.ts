@@ -1,0 +1,9 @@
+/** Historical observations. Selecting one populates a review form, never an approved plan. */
+export const historicalCostReferences=[
+ {id:'rice-2025',crop:'rice',practice:'논벼 / Paddy rice',year:2025,geography:'전국 / Korea',areaM2:1000,basis:'PRODUCTION_COST' as const,totalWon:921395,laborWon:204769,contractedWorkWon:160891,
+  sourceUrl:'https://www.kostat.go.kr/boardDownload.es?bid=227&list_no=444235&seq=1',asOf:'2026-03-27',checkedOn:'2026-10-20',page:'PDF 7 / printed 3',exclusions:['POST_HARVEST_DISTRIBUTION'],method:'2025 paddy production cost survey; includes own/hired labor and capital services. Sales/distribution after harvest excluded.'},
+ {id:'potato-2024',crop:'potato',practice:'봄감자 1기작 / Spring potato, one cycle',year:2024,geography:'전국 / Korea',areaM2:1000,basis:'OPERATING_COST' as const,totalWon:1443511,laborWon:354340,contractedWorkWon:29300,
+  sourceUrl:'https://nongsaro.go.kr/portal/ps/psb/psbf/frmprdIncomeInfoNew.ps?menuId=PS65587',asOf:'2024-12-31',checkedOn:'2026-10-19',page:'2024 national income book, PDF 25 / printed 19',exclusions:['OWN_LABOR_AND_CAPITAL'],method:'2024 RDA spring potato income survey, 136 farms, one cycle. Hired labor 354340 KRW and contracted farming 29300 KRW already included; own labor/capital are outside operating cost.'},
+ {id:'pepper-2024',crop:'pepper',practice:'노지고추 / Open-field pepper',year:2024,geography:'전국 / Korea',areaM2:1000,basis:'PRODUCTION_COST' as const,totalWon:5275000,laborWon:3268000,contractedWorkWon:null,
+  sourceUrl:'https://www.nihhs.go.kr/farmer/statistics/statistics.do?t_cd=0207',asOf:'2024-12-31',checkedOn:'2026-10-19',page:'Horticultural production cost (2024)',exclusions:['LABOR_BREAKDOWN_NOT_VERIFIED'],method:'2024 horticultural production cost table, values published in thousand KRW per 10a. Own/hired labor split not available in this table; do not replace all labor with payroll.'},
+] as const;

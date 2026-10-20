@@ -27,7 +27,7 @@ export const todayKst=()=>new Date(Date.now()+9*3600000).toISOString().slice(0,1
 export const hash=(v:unknown)=>createHash('sha256').update(JSON.stringify(v)).digest('hex');
 export const weatherHash=(w:ForecastResult)=>hash({status:w.status,issuedAt:w.issuedAt,grid:w.grid,points:w.points});
 export const REPLANNING_RULE_VERSION='annual-resource-tradeoffs-v14-harvest-day-recovery';
-export type ReplanInput={manualFallback?:boolean;deferAfter?:string;outage?:EquipmentDowntime;allowBorrowing?:boolean;searchMode?:'LOCAL_FIRST';ids:string[];day?:string;preferred?:string;simulation?:Simulation;replacement?:EquipmentReplacement;reason?:string;scope?:'PRESERVE'|'EXPAND';automaticReplacement?:boolean;newLaborSupport?:boolean;decisionPriority?:import('./planning-priority').DecisionPriority};
+export type ReplanInput={resourceReview?:boolean;manualFallback?:boolean;deferAfter?:string;outage?:EquipmentDowntime;allowBorrowing?:boolean;searchMode?:'LOCAL_FIRST';ids:string[];day?:string;preferred?:string;simulation?:Simulation;replacement?:EquipmentReplacement;reason?:string;scope?:'PRESERVE'|'EXPAND';automaticReplacement?:boolean;newLaborSupport?:boolean;decisionPriority?:import('./planning-priority').DecisionPriority};
 type Window=MissionWindow;
 type Job=SchedulingJob;
 export type ReplanAssignment=SchedulingAssignment;

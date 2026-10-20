@@ -20,7 +20,7 @@ export function smsInput(date='2032-09-01'){
 /** Preserve the disposable database too; never operate on a production DB. */
 export async function smsFixture(date?:string){
  if(!process.env.DATABASE_URL?.endsWith('/kfarm_test'))throw Error('isolated test DB required');
- const kinds=['smsMessage','smsAttempt','consultation','laborOperations','laborDemand'],spaces=['sandbox','center:janggye'];
+ const kinds=['smsManagementReceipt','smsResendRequest','laborRecovery','smsMessage','smsAttempt','consultation','laborOperations','laborDemand'],spaces=['sandbox','center:janggye'];
  const centers=await db.center.findMany({where:{id:{in:['demo','janggye']}}}),records=await db.workRecord.findMany({where:{workspace:{in:spaces},kind:{in:kinds}}}),audits=await db.audit.findMany({select:{id:true}});
  const input=smsInput(date);
  await db.$transaction(async tx=>{

@@ -15,6 +15,9 @@ import {SCHEDULING_ENGINE_VERSION} from './scheduling-engine';
 import {dispatchPlacementKey} from './annual-dispatch';
 import {readProductionCoordination} from './production-coordination-store';
 import {coordinationVersion} from './production-coordination';
+import {laborPoliciesForDates} from './labor-policy-store';
+import {payBasis,type PayBasis} from './labor-policy';
+import {centerRegistry} from './center-registry';
 export const productionKey=(kind:string,id='current')=>({where:{workspace_kind_id:{workspace:recordSpace(),kind,id}}});
 const json=(v:unknown)=>JSON.parse(JSON.stringify(v)) as Prisma.InputJsonValue;
 const hash=(v:unknown)=>createHash('sha256').update(JSON.stringify(v)).digest('hex');
@@ -27,8 +30,11 @@ export function savedCropSelector(view:any,strict=true):CropSelector{
 }
 export const productionToday=()=>new Date(Date.now()+9*3600000).toISOString().slice(0,10);
 export async function lockProduction(tx:Prisma.TransactionClient){
- await tx.$queryRaw`SELECT id FROM "Center" WHERE id=${activeCenterId()} FOR UPDATE`;
- await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`fields:${recordSpace()}`}))`;
+ // Joint decisions depend on the four-center snapshot. Match resource changes'
+ // deterministic row-lock order and keep foreign wages/resources/land stable
+ // through the final recheck and commit (model inference runs outside this lock).
+ await tx.$queryRaw`SELECT id FROM "Center" ORDER BY id FOR UPDATE`;
+ for(const space of centerRegistry.map(c=>recordSpace(c.id)).sort())await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`fields:${space}`}))`;
  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'production-coordination'}))`;
 }
 // Explicit scope is for server-side aggregate planning only. HTTP callers never
@@ -50,9 +56,13 @@ export async function readProductionSource(tx:Prisma.TransactionClient,scopeId=a
  const shared=await tx.workRecord.findMany({where:{workspace:'shared',kind:'resourceReservation'},orderBy:{id:'asc'}});
  const history=await readExecutionHistory(tx,recordSpace(scopeId));
  const today=productionToday(),coordination=await readProductionCoordination(tx,scopeId,today);
- return {scopeId,state:center?await resourceView(tx,center.state as unknown as State,scopeId):undefined,fields:(inventory?.payload??[]) as FieldEntry[],version:inventory?.version??0,cycles:records.filter(r=>r.kind==='cultivation').map(r=>r.payload as unknown as Cultivation),participations:records.filter(r=>r.kind==='fieldParticipation').map(r=>r.payload as unknown as Participation),criteria,contacts,shared:shared.map(r=>r.payload),history,today,coordination,operationKinds};
+ // Planning can cross a calendar year. Keep the exact reviewed yearly wage
+ // policy in the source fingerprint; a missing future policy remains unknown.
+ const year=Number(today.slice(0,4)),policies=await laborPoliciesForDates(tx,scopeId,[0,1,2].map(n=>`${year+n}-01-01`));
+ const laborPayByYear=Object.fromEntries(Object.entries(policies).flatMap(([key,value])=>{const basis=payBasis(value.policy,value.version);return basis?[[key,basis]]:[]}));
+ return {scopeId,state:center?await resourceView(tx,center.state as unknown as State,scopeId):undefined,fields:(inventory?.payload??[]) as FieldEntry[],version:inventory?.version??0,cycles:records.filter(r=>r.kind==='cultivation').map(r=>r.payload as unknown as Cultivation),participations:records.filter(r=>r.kind==='fieldParticipation').map(r=>r.payload as unknown as Participation),criteria,contacts,shared:shared.map(r=>r.payload),history,today,coordination,operationKinds,laborPayByYear};
 }
-export type ProductionSource=Awaited<ReturnType<typeof readProductionSource>>;
+export type ProductionSource=Omit<Awaited<ReturnType<typeof readProductionSource>>,'laborPayByYear'>&{laborPayByYear?:Record<string,PayBasis>};
 export async function calculateProduction(s:ProductionSource,selectCrop?:CropSelector,options:ProductionRunOptions={}){
  const empty:State={name:'센터',planVersion:0,fields:[],missions:[],machines:[],events:[],revisions:[],registered:false,planned:false,ruleVersion:'UNCONFIGURED',staffCount:0,transportCount:0};
  const state=planningState(s.state??empty,s.history);
@@ -105,6 +115,13 @@ export async function approveProduction(tx:Prisma.TransactionClient,input:{reque
  if(!source.state||reviewed?.fingerprint!==input.fingerprint||productionSourceHash(source)!==(reviewed?.sourceFingerprint??reviewed?.fingerprint))throw Error('농지·계획·참여조건·자원이 변경되었습니다. 다시 확인하세요.');
  if(reviewed.aiReviewError)throw Error('AI 검토 오류를 확인하세요. 다시 검토하거나 계산 기준으로 명시적으로 되돌린 뒤 승인하세요.');
  const integrated=reviewed.integratedPlan;
+ if(integrated?.networkSourceHashes){
+  // A staged joint decision also depends on other centers' unapproved land,
+  // labor policies and resources, not only already-persisted reservations.
+  const current=[];
+  for(const center of centerRegistry)current.push([center.id,productionSourceHash(await readProductionSource(tx,center.id))]);
+  if(hash(current)!==hash(integrated.networkSourceHashes))throw Error('다른 센터의 농지·자원·비용 근거가 변경되었습니다. 통합계획을 다시 검토하세요.');
+ }
  if(integrated&&input.pnus.some(p=>!integrated.choices.some((c:{pnu:string})=>c.pnu===p)))throw Error('통합계획의 검토 대상과 승인 대상이 다릅니다.');
  const view=(await calculateProduction(source,integrated?undefined:savedCropSelector(reviewed),integrated?{choices:integrated.choices}:{}));
  const selected=view.items.filter(i=>input.pnus.includes(i.pnu));

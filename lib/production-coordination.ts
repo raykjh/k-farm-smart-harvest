@@ -1,8 +1,10 @@
 import {z} from 'zod';
 import {cropCodeSchema,type SupportedCropCode} from './crop-registry';
 import {supplySignal,type Range} from './crop-reference';
+import {economicReferencesSchema} from './crop-economics';
+import {nationalReferencesSchema} from './production-evidence';
 
-export const coordinationVersion='production-coordination-v2';
+export const coordinationVersion='production-coordination-v3';
 const day=z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(v=>Number.isFinite(Date.parse(v))&&new Date(v).toISOString().slice(0,10)===v);
 const text=z.string().trim().min(1).max(500);
 const range=z.object({low:z.number().finite().nonnegative(),high:z.number().finite().nonnegative()}).strict().refine(v=>v.low<=v.high);
@@ -14,12 +16,28 @@ export const coordinationPolicySchema=z.object({
  // Reviewed outlook, not a price predictor. Its period must cover the harvest,
  // not simply the date when the operator happens to plan the crop.
  marketOutlooks:z.array(z.object({crop:cropCodeSchema,commodity:text,from:day,to:day,pressure:z.enum(['OVERSUPPLY_RISK','BALANCED','SHORTAGE_RISK']),...evidence}).strict()).max(300).optional(),
+ // Optional additions preserve every historical policy. Background observations
+ // never become participant demand caps or next-harvest price predictions.
+ nationalReferences:nationalReferencesSchema.optional(),
+ economicReferences:economicReferencesSchema.optional(),
+ equipmentCostRates:z.array(z.object({centerId:z.string().min(1).max(80),machineId:z.string().min(1).max(150),origin:z.enum(['REGISTERED','DEMO']),wonPerHour:z.number().finite().nonnegative(),unit:z.literal('KRW_PER_HOUR'),version:text,sourceUrl:z.string().url().refine(v=>v.startsWith('https://')),checkedOn:day,validUntil:day}).strict()).max(300).optional(),
+ // Operator pay is an explicitly reviewed cost input, never inferred from the
+ // ordinary-worker wage. It is not payroll, attendance or employment evidence.
+ operatorCostRates:z.array(z.object({centerId:z.string().min(1).max(80),origin:z.enum(['REGISTERED','DEMO']),year:z.number().int().min(2000).max(2200),hourlyWon:z.number().int().positive().max(1000000),policyVersion:z.number().int().nonnegative(),version:text,...evidence}).strict()).max(300).optional(),
 }).strict().superRefine((p,ctx)=>{
  for(const [key,values] of [['yields',p.yields.map(v=>v.crop)],['targets',p.targets.map(v=>`${v.commodity}:${v.year}:${v.origin}`)],['specialties',p.specialties.map(v=>`${v.centerId}:${v.crop}`)]] as const)if(new Set(values).size!==values.length)ctx.addIssue({code:'custom',path:[key],message:'기준 중복'});
  for(const values of [p.yields,p.targets,p.specialties,p.marketOutlooks??[]])for(const v of values)if(v.checkedOn>v.validUntil)ctx.addIssue({code:'custom',message:'검토일·유효기간 확인 필요'});
  for(const [i,m] of (p.marketOutlooks??[]).entries()){
   if(m.from>m.to)ctx.addIssue({code:'custom',path:['marketOutlooks',i],message:'수확 전망 기간 확인 필요'});
   if(p.marketOutlooks!.slice(0,i).some(o=>o.crop===m.crop&&o.commodity===m.commodity&&o.from<=m.to&&m.from<=o.to))ctx.addIssue({code:'custom',path:['marketOutlooks',i],message:'같은 생산물의 전망 기간이 중복됩니다.'});
+ }
+ for(const [i,r] of (p.equipmentCostRates??[]).entries()){
+  if(r.checkedOn>r.validUntil)ctx.addIssue({code:'custom',path:['equipmentCostRates',i],message:'장비 단가 검토일·유효기간 확인 필요'});
+  if(p.equipmentCostRates!.slice(0,i).some(o=>o.centerId===r.centerId&&o.machineId===r.machineId&&o.origin===r.origin&&o.checkedOn<=r.validUntil&&r.checkedOn<=o.validUntil))ctx.addIssue({code:'custom',path:['equipmentCostRates',i],message:'장비 단가 기간 중복'});
+ }
+ for(const [i,r] of (p.operatorCostRates??[]).entries()){
+  if(r.checkedOn>r.validUntil)ctx.addIssue({code:'custom',path:['operatorCostRates',i],message:'운영자 보수 기준 유효기간 확인 필요'});
+  if(p.operatorCostRates!.slice(0,i).some(o=>o.centerId===r.centerId&&o.origin===r.origin&&o.year===r.year))ctx.addIssue({code:'custom',path:['operatorCostRates',i],message:'센터·연도별 운영자 보수 기준 중복'});
  }
 });
 export type CoordinationPolicy=z.infer<typeof coordinationPolicySchema>;

@@ -7,7 +7,7 @@ import {recommendConditions} from './field-conditions';
 import type {FieldEntry} from './field-record';
 import type {Cultivation} from './cultivation';
 import type {State} from './types';
-import {isLegacyCrop,type SupportedCropCode} from './crop-registry';
+import {isLegacyCrop,cropCodes,type SupportedCropCode} from './crop-registry';
 import {catalogOperationTasks} from './catalog-operating-plan';
 import {workloadCrop} from './crop-workload-catalog';
 import {candidateContribution,coordinateCandidate,type CoordinationContext,type CandidateCoordination} from './production-coordination';
@@ -80,7 +80,7 @@ export async function planContinuousProduction(input:{fields:FieldEntry[];partic
  const coordination=input.coordination?structuredClone(input.coordination):undefined;
  const participants=new Map(input.participations.map(p=>[p.pnu,p]));
  // Stable inventory order breaks equal receive timestamps. No PNU-based queue.
- const ordered=fields.filter(f=>f.mode==='full').map((f,index)=>({f,index,p:participants.get(f.pnu)})).sort((a,b)=>(a.p?.receivedAt??'9999').localeCompare(b.p?.receivedAt??'9999')||a.index-b.index);
+ const ordered=fields.filter(f=>f.mode==='full').map(f=>({f,p:participants.get(f.pnu)})).sort((a,b)=>(a.p?.receivedAt??'9999').localeCompare(b.p?.receivedAt??'9999')||a.f.pnu.localeCompare(b.f.pnu));
  const items:ProductionItem[]=[];
  for(const {f,p} of ordered){
   const history=cycles.filter(c=>c.pnu===f.pnu).sort((a,b)=>a.start.localeCompare(b.start)||a.id.localeCompare(b.id));
@@ -116,7 +116,7 @@ export async function planContinuousProduction(input:{fields:FieldEntry[];partic
     if(ready)candidates.push({plan:{...proposal,score:adjustment?.score??proposal.score},name:profile.name,profileId:profile.id,coordination:adjustment});
    }catch(e){item.comparisons.push({crop:c.crop,score:c.score,status:'BLOCKED',reason:e instanceof Error?e.message:'작기 기준 확인 필요'})}
   }
-  candidates.sort((a,b)=>b.plan.score-a.plan.score||a.plan.cultivation.start.localeCompare(b.plan.cultivation.start)||a.name.localeCompare(b.name));
+  candidates.sort((a,b)=>b.plan.score-a.plan.score||a.plan.cultivation.start.localeCompare(b.plan.cultivation.start)||a.name.localeCompare(b.name)||cropCodes.indexOf(a.plan.cultivation.crop)-cropCodes.indexOf(b.plan.cultivation.crop)||a.profileId.localeCompare(b.profileId));
   const facts=candidates.map((c,index)=>({id:String(index).padStart(3,'0'),crop:c.plan.cultivation.crop,score:c.coordination?.rankingScore??c.plan.score,specialtyBonus:c.coordination?.specialtyBonus??0,supplyPenalty:c.coordination?.supply.penalty??0,borrowedEquipmentTasks:c.plan.dispatch.assignments.filter(a=>a.machineId&&reserved.machines.some(m=>m.id===a.machineId&&m.ownerCenterId&&m.ownerCenterId!==(reserved.centerSharing?.centerId??'demo'))).length,personMinutes:c.plan.dispatch.assignments.reduce((n,a)=>n+a.staff*a.durationMinutes,0)}));
   item.candidateFacts=facts;
   const decision=selectCrop&&!choice?await selectCrop(f.pnu,facts):await adviseOperatingCrop(facts,false);

@@ -1,4 +1,5 @@
 'use client';
+import {addressText} from '@/lib/display-language';
 import {operationalText} from '@/lib/operational-i18n';
 import {useEffect,useState} from 'react';
 import type {Field} from '@/lib/types';
@@ -42,7 +43,7 @@ export default function FieldManagement({field,onSaved}:{field:Field;onSaved:()=
  const tabs:[Tab,string][]=[['owner',t('소유주','Owner')],['field',t('농지 정보','Field details')],['crop',t('작물·생산','Crop / production')],['history',t('작업 이력','Work history')]];
  const fact=(label:string,value:string|number|undefined|null)=><div key={label}><dt>{label}</dt><dd>{value||t('미등록','Not recorded')}</dd></div>;
  return <div className="field-management" data-testid="field-management">
-  <div className="field-management-heading"><h3>{field.address}</h3><span>{pending?t('작물 선택 대기','Awaiting crop selection'):operationalText(field.crop,locale)}</span></div>
+  <div className="field-management-heading"><h3>{addressText(field.address,locale)}</h3><span>{pending?t('작물 선택 대기','Awaiting crop selection'):operationalText(field.crop,locale)}</span></div>
   <div className="field-management-tabs" role="tablist" aria-label={t('농지 관리','Field management')}>
    {tabs.map(([id,label])=><button key={id} type="button" role="tab" id={'field-tab-'+id} aria-selected={tab===id} aria-controls={'field-panel-'+id} onClick={()=>{setTab(id);setVisited(v=>v.includes(id)?v:[...v,id]);}}>{label}</button>)}
   </div>
@@ -63,7 +64,7 @@ export default function FieldManagement({field,onSaved}:{field:Field;onSaved:()=
      {!owner&&!error&&<p>{t('연결된 소유주 상세 등록자료가 없습니다.','No linked owner details are recorded.')}</p>}
     </>}</>}
     {id==='field'&&<><dl className="ledger-facts">
-     {fact(t('지번 주소','Parcel address'),field.address)}{fact(t('필지 번호','Parcel ID'),field.id)}
+     {fact(t('지번 주소','Parcel address'),addressText(field.address,locale))}{fact(t('필지 번호','Parcel ID'),field.id)}
      {fact(t('작업 면적','Work area'),field.area.toLocaleString()+' m²')}
      {fact(t('토지 형태','Land type'),entry?.conditions?({paddy:t('논','Paddy'),upland:t('밭','Upland'),orchard:t('과수원','Orchard'),unknown:t('미확인','Unknown')}[entry.conditions.landUse]):undefined)}
      {fact(t('관리 지역','Service area'),entry?.conditions?.region)}{fact(t('작물','Crop'),pending?t('작물 선택 대기','Awaiting crop selection'):operationalText(field.crop,locale))}

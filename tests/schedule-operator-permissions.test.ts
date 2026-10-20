@@ -22,11 +22,11 @@ it('does not grant centerless, unknown-center or global accounts local schedulin
  }
 });
 
-it('keeps staff scheduling actions explicit without granting account, lending or shared-standard administration',()=>{
+it('keeps staff scheduling actions explicit without granting account or shared-standard administration',()=>{
  for(const action of ['deleteAll','changeRole',undefined])expect(permitted(staff,'replanning','POST',{action})).toBe(false);
  expect(permitted(staff,'replanning','DELETE',null)).toBe(false);
  expect(permitted(staff,'task-schedule','POST',{action:'deleteAll'})).toBe(false);
- for(const path of ['accounts','regional-crop-standards','center-settings','center-resources','shared-reservations']){
+ for(const path of ['accounts','regional-crop-standards']){
   expect(permitted(staff,path,'POST',{action:'approve'})).toBe(false);
  }
 });

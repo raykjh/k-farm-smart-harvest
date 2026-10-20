@@ -4,7 +4,7 @@ import {mutateReservation} from '../lib/reservation-lifecycle';
 import type {Principal} from '../lib/auth';
 it('approves, rejects stale/unauthorized changes, changes, cancels and releases a slot',async()=>{
  const id='loan-test-'+crypto.randomUUID(),owner=id+'owner',borrower=id+'borrower';
- const actor={id:'tester',role:'CENTER_ADMIN',centerId:owner} as Principal;
+ const actor={id:'tester',enabled:true,role:'CENTER_ADMIN',centerId:owner} as Principal;
  const base={fields:[],missions:[],machines:[]};
  try{
  await db.center.create({data:{id:owner,state:{...base,machines:[{id,ownerCenterId:owner,status:'AVAILABLE',safetyLock:false}]}}});

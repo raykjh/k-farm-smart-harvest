@@ -1,3 +1,4 @@
+import {isCenterOperator} from './auth-policy';
 import {z} from 'zod';
 import type {Prisma} from '@prisma/client';
 import type {Principal} from './auth';
@@ -17,7 +18,7 @@ export const sharingOfferSchema=z.object({id:z.string().uuid(),version:z.number(
 export type SharingOffer=z.infer<typeof sharingOfferSchema>&{ownerCenterId:string};
 export type ResourceBlock={machineId:string;date:string};
 export async function saveSharingOffer(tx:Prisma.TransactionClient,raw:unknown,actor:Principal){
- const b=sharingOfferSchema.parse(raw);if(actor.role!=='CENTER_ADMIN'||!actor.centerId)throw Error('소유 센터 관리자 권한 필요');
+ const b=sharingOfferSchema.parse(raw);if(!isCenterOperator(actor)||!actor.centerId)throw Error('소유 센터 관리자 권한 필요');
  await lockCenterPool(tx);
  const row=await tx.center.findUniqueOrThrow({where:{id:actor.centerId}}),s=row.state as unknown as State;
  const m=s.machines.find(m=>m.id===b.machineId&&(!m.ownerCenterId||m.ownerCenterId===actor.centerId));

@@ -48,7 +48,7 @@ it.each(['spare','preapproved','request'] as const)('repair past the crop window
    expect(await call(input)).toEqual(result);
    expect((await call({...input,requestId:randomUUID()})).loanRequests[0].id).toBe(loan.id);
    expect(await db.workRecord.count({where:{kind:'equipmentLoan'}})).toBe(1);
-   await expect(db.$transaction(tx=>saveLoan(tx,{...(loan.payload as object),version:loan.version,status:'CONFIRMED',operatorConfirmed:true,transportConfirmed:true},session.principal))).rejects.toThrow('센터 관리자');
+   await expect(db.$transaction(tx=>saveLoan(tx,{...(loan.payload as object),version:loan.version,status:'CONFIRMED',operatorConfirmed:true,transportConfirmed:true},session.principal))).rejects.toThrow('소유 센터');
    await db.$transaction(tx=>saveLoan(tx,{...(loan.payload as object),version:loan.version,status:'CONFIRMED',operatorConfirmed:true,transportConfirmed:true},owner.principal));
    expect((await call({...input,requestId:randomUUID()})).status).toBe('APPLIED');
   }else expect(result.status).toBe('APPLIED');

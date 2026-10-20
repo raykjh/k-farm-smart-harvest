@@ -1,3 +1,4 @@
+import {hasCenterOperationsRole} from './auth-policy';
 import {z} from 'zod';
 import type {Prisma} from '@prisma/client';
 import type {Principal} from './auth';
@@ -10,7 +11,7 @@ export const reservationAction=z.discriminatedUnion('action',[
 ]);
 const key=(id:string)=>({workspace:'shared',kind:'resourceReservation',id});
 /** Independent loan-slot lifecycle. Existing scheduled jobs must use plan approval instead. */
-export async function mutateReservation(tx:Prisma.TransactionClient,input:unknown,actor:Principal){
+export async function mutateReservation(tx:Prisma.TransactionClient,input:unknown,actor:Principal,allowBorrowerCancel=false){
  const b=reservationAction.parse(input),id=b.action==='approve'?b.reservation.id:b.id;
  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`reservation:${id}`},0))`;
  const row=await tx.workRecord.findUnique({where:{workspace_kind_id:key(id)}});
@@ -25,7 +26,7 @@ export async function mutateReservation(tx:Prisma.TransactionClient,input:unknow
  const owners=centers.filter(c=>(c.state as unknown as State).machines.some(m=>m.id===r.resourceId&&(!m.ownerCenterId||m.ownerCenterId===c.id)));
  if(owners.length!==1)throw Error('장비 원소속을 유일하게 확인할 수 없습니다.');
  const owner=owners[0],machine=(owner.state as unknown as State).machines.find(m=>m.id===r.resourceId)!;
- if(actor.role!=='SUPER_ADMIN'&&(actor.role!=='CENTER_ADMIN'||actor.centerId!==owner.id))throw Error('장비 소속 센터 관리자만 승인·변경·취소할 수 있습니다.');
+ if(actor.role!=='SUPER_ADMIN'&&(!hasCenterOperationsRole(actor)||actor.centerId!==owner.id&&!(allowBorrowerCancel&&b.action==='cancel'&&actor.centerId===r.centerId)))throw Error('장비 소속 센터 관리자만 승인·변경·취소할 수 있습니다.');
  if(!centers.some(c=>c.id===r.centerId))throw Error('대여 센터가 등록되지 않았습니다.');
  // Avoid silently detaching a booking from an approved job or changing work windows.
  if(centers.some(c=>(c.state as unknown as State).missions.some(m=>m.id===r.taskId&&c.id===r.centerId)))throw Error('연결된 작업은 일정 재계획·승인에서 함께 변경해야 합니다.');

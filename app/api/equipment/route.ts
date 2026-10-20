@@ -1,3 +1,5 @@
+import {queueEquipmentReview,processEquipmentReview} from '@/lib/equipment-scheduling';
+import {currentPrincipal} from '@/lib/auth';
 import {centerId as activeCenterId} from '@/lib/workspace';
 import {lockCenterPool} from '@/lib/center-resources';
 import {NextRequest,NextResponse} from 'next/server';
@@ -11,7 +13,7 @@ import type {State} from '@/lib/types';
 import type {Prisma} from '@prisma/client';
 const input=z.object({version:z.number().int(),existingId:z.string().optional(),autoCode:z.boolean().optional(),equipment:equipmentInput}).strict();
 export const POST=withAuth('equipment',async(req:NextRequest)=>{
- try{const b=input.parse(await req.json());const id=await db.$transaction(async tx=>{
+ try{const b=input.parse(await req.json());const saved=await db.$transaction(async tx=>{
   await lockCenterPool(tx);
   const row=await tx.center.findUniqueOrThrow({where:{id:activeCenterId()}}),s=row.state as unknown as State;
   if(s.planVersion!==b.version)throw Error('자료가 변경되었습니다. 새로고침 후 다시 확인하세요.');
@@ -19,10 +21,13 @@ export const POST=withAuth('equipment',async(req:NextRequest)=>{
   const others=await tx.center.findMany({where:{id:{not:activeCenterId()}}});
   if(!b.existingId&&others.some(c=>(c.state as unknown as State).machines.some(m=>m.id===equipment.id)))throw Error('다른 센터에 등록된 장비코드입니다.');
   const old=s.machines.find(m=>m.id===b.existingId);
-  if(old&&others.some(c=>(c.state as unknown as State).missions.some(m=>m.resourceId===old.id&&!['COMPLETED','CANCELLED'].includes(m.status)))&&(old.status!==equipment.status||old.capacityHaHour!==equipment.capacityHaHour))throw Error('다른 센터에 연결된 작업의 영향 검토가 필요합니다. 고장은 공유 장비 고장 기록을 이용하세요.');
+  const returning=old?.status==='MAINTENANCE'&&equipment.status==='AVAILABLE'&&!old.safetyLock;
+  if(old&&others.some(c=>(c.state as unknown as State).missions.some(m=>m.resourceId===old.id&&!['COMPLETED','CANCELLED'].includes(m.status)))&&(old.status!==equipment.status&&!returning||old.capacityHaHour!==equipment.capacityHaHour))throw Error('다른 센터에 연결된 작업의 영향 검토가 필요합니다. 고장은 공유 장비 고장 기록을 이용하세요.');
   const next=applyEquipmentEdit(s,equipment,b.existingId,s.centerSharing?.centerId??activeCenterId());
   await tx.center.update({where:{id:activeCenterId()},data:{state:next as unknown as Prisma.InputJsonValue,version:{increment:1}}});
-  await tx.audit.create({data:{centerId:activeCenterId(),action:b.existingId?'equipment.edit':'equipment.create',detail:{actor:actorLabel(),id:equipment.id,planVersion:next.planVersion}}});
-  return equipment.id;
- });return NextResponse.json({ok:true,id});}catch(e){return NextResponse.json({error:e instanceof Error?e.message:'저장 실패'},{status:409})}
+  await tx.audit.create({data:{centerId:activeCenterId(),action:b.existingId?'equipment.edit':'equipment.create',detail:JSON.parse(JSON.stringify({actor:actorLabel(),id:equipment.id,planVersion:next.planVersion,before:old??null,after:next.machines.find(m=>m.id===equipment.id)}))}});
+  const changed=!old?equipment.status==='AVAILABLE':old.status!==equipment.status;
+  const reviewId=changed?await queueEquipmentReview(tx,equipment.id,currentPrincipal()!,returning?'수리 복귀에 따른 지역 장비 재배분':'장비 등록·상태 변경에 따른 지역 일정 검토'):null;
+  return {id:equipment.id,reviewId};
+ });const review=saved.reviewId?await processEquipmentReview(saved.reviewId):null;return NextResponse.json({ok:true,...saved,review});}catch(e){return NextResponse.json({error:e instanceof Error?e.message:'저장 실패'},{status:409})}
 });

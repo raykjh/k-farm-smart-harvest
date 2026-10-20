@@ -1,3 +1,4 @@
+import {saveAttendanceChanges} from '@/lib/labor-attendance-save';
 import {centerId as activeCenterId,recordSpace} from '@/lib/workspace';
 import {actorLabel,accountBirthSchema,accountPhoneSchema} from '@/lib/auth';
 import {withAuth} from '@/lib/auth-route';
@@ -86,10 +87,7 @@ async function handlePOST(req:NextRequest){
   }
   if(a.action==='employees')saveEmployees(s,a.input,new Date(Date.parse(now)+9*3600000).toISOString().slice(0,10));
   if(a.action==='saveAttendance'){
-   for(const id of a.jobIds){const j=s.jobs.find(j=>j.id===id),d=ds.find(d=>d.id===j?.missionId&&d.sourceHash===j.sourceHash);if(!j||!d||d.held||d.completed)throw Error('작업 일정이 변경되었습니다. 명단을 다시 불러오세요.');}
-   for(const change of a.changes.filter(c=>c.response==='DECLINED'&&!c.personId.startsWith('reserve:'))){const j=s.jobs.find(j=>j.id===change.jobId);if(j?.assigned.includes(change.personId))await recordLaborRecovery(tx,absenceInput(crypto.randomUUID(),activeCenterId(),change.personId,s.people.find(p=>p.id===change.personId)!.name,j,'담당자가 불참 답신 확인',operator));}
-   applyAttendanceReview(s,a.jobIds,a.changes,now);
-   for(const j of s.jobs.filter(j=>a.jobIds.includes(j.id))){if(j.attendance){j.attendance.reviewedAt=now;j.attendance.reviewedBy=operator;}}
+   await saveAttendanceChanges(tx,activeCenterId(),s,a.jobIds,a.changes,operator,now);
   }
   if(a.action==='open'){
    const d=ds.find(d=>d.id===a.demandId);if(!d||d.held||d.completed)throw Error('현재 배정 가능한 단순 인력 수요가 아닙니다.');

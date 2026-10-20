@@ -10,12 +10,12 @@ import {GET as fields} from '../app/api/fields/route';
 import {POST as records} from '../app/api/execution-records/route';
 import {POST as authPost} from '../app/api/auth/route';
 import {POST as accountsPost} from '../app/api/accounts/route';
-it('denies anonymous, other center and staff report finalization even with forged actor/header',async()=>{
+it('denies anonymous, foreign-center and malformed report requests despite forged headers',async()=>{
  const staff=await testSession('CENTER_STAFF'),other=await testSession('CENTER_ADMIN','another-center'),admin=await testSession();
  try{
  expect((await fields(new NextRequest('http://127.0.0.1:3100/api/fields'))).status).toBe(401);
  expect((await fields(new NextRequest('http://127.0.0.1:3100/api/fields',{headers:other.headers}))).status).toBe(403);
- expect((await records(new NextRequest('http://127.0.0.1:3100/api/execution-records',{method:'POST',headers:{...staff.headers,'x-role':'SUPER_ADMIN'},body:JSON.stringify({kind:'snapshot',input:{actor:'forged'}})}))).status).toBe(403);
+ expect((await records(new NextRequest('http://127.0.0.1:3100/api/execution-records',{method:'POST',headers:{...staff.headers,'x-role':'SUPER_ADMIN'},body:JSON.stringify({kind:'snapshot',input:{actor:'forged'}})}))).status).toBe(400);
  expect((await records(new NextRequest('http://127.0.0.1:3100/api/execution-records',{method:'POST',headers:{...admin.headers,origin:'https://evil.example'},body:'{}'}))).status).toBe(403);
  expect(permitted({...testPrincipal,role:'SUPER_ADMIN',centerId:null},'fields','GET',null)).toBe(false);
  expect(permitted({...testPrincipal,role:'CENTER_STAFF'},'replanning','POST',{action:'preview'})).toBe(true);

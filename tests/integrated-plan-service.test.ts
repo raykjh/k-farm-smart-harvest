@@ -5,7 +5,7 @@ import {db} from '../lib/db';
 import {centerRegistry} from '../lib/center-registry';
 import {recordSpace} from '../lib/workspace';
 import {inCenter} from '../lib/workspace';
-import {createJointDraft,stageJointDraft,readJointDraftViews} from '../lib/integrated-plan-service';
+import {createJointDraft,stageJointDraft,readJointDraftViews,applyJointPlan} from '../lib/integrated-plan-service';
 import {approveProduction,productionKey,refreshProduction} from '../lib/production-service';
 import {jointSource,fakeJointCompletion} from './integrated-plan-fixture';
 import {reviewProductionAutomatically} from '../lib/production-auto-review';
@@ -68,17 +68,17 @@ it('background AI persists a review once, with no automatic approval or duplicat
   expect((await tx.workRecord.findUniqueOrThrow(productionKey('continuousProduction'))).payload).toMatchObject({integratedPlan:{source:'NEBIUS'}});
  }finally{vi.unstubAllEnvs()}
 }));
-it('staff confirms the saved AI plan through the real route, but cannot confirm rules or another center plan',async()=>{
+it('staff confirms a saved AI plan through the real route while stale and foreign-center approvals remain blocked',async()=>{
  const staff=await testSession('CENTER_STAFF'),neighbor=await testSession('CENTER_STAFF','janggye');
  const request=(session:typeof staff,body?:unknown)=>new NextRequest('http://127.0.0.1:3100/api/continuous-production',{headers:session.headers,...(body?{method:'POST',body:JSON.stringify(body)}:{})});
  try{await isolated(async tx=>{
   const initial=await refreshProduction(tx),command={action:'approve',requestId:randomUUID(),fingerprint:initial.fingerprint,pnus:initial.items.filter((i:any)=>i.proposal).map((i:any)=>i.pnu),provisionalAcknowledged:true};
-  expect((await postProduction(request(staff,command))).status).toBe(409);
+  expect((await postProduction(request(staff,{...command,fingerprint:'0'.repeat(64)}))).status).toBe(409);
   expect(await tx.workRecord.count({where:{kind:'productionApproval'}})).toBe(0);
   const input={requestId:randomUUID(),mode:'AI' as const,audience:'demo'},draft=await createJointDraft(input,'tester',fakeJointCompletion);
   const staged=await stageJointDraft(tx,{requestId:input.requestId,audience:'demo',fingerprint:draft.fingerprint},'tester');
-  expect(await (await getProduction(request(staff))).json()).toMatchObject({canManage:false,canApprove:true});
-  expect(await (await getProduction(request(neighbor))).json()).toMatchObject({canManage:false,canApprove:false});
+  expect(await (await getProduction(request(staff))).json()).toMatchObject({canManage:true,canApprove:true});
+  expect(await (await getProduction(request(neighbor))).json()).toMatchObject({canManage:true,canApprove:false});
   const approve={...command,fingerprint:staged.view.fingerprint,pnus:staged.view.items.filter((i:any)=>i.proposal).map((i:any)=>i.pnu)};
   expect((await postProduction(request(neighbor,approve))).status).toBe(409);
   const saved=await postProduction(request(staff,approve));expect(saved.status).toBe(200);expect(await saved.json()).toMatchObject({fields:2});
@@ -88,3 +88,15 @@ it('staff confirms the saved AI plan through the real route, but cannot confirm 
   expect(await tx.workRecord.count({where:{kind:'cultivation'}})).toBe(2);
  })}finally{await db.audit.deleteMany({where:{OR:[{detail:{path:['actorId'],equals:staff.id}},{detail:{path:['actorId'],equals:neighbor.id}}]}});await staff.cleanup();await neighbor.cleanup()}
 });
+
+it('single-command AI application commits once and preserves existing records on replay',async()=>isolated(async tx=>{
+ const requestId=randomUUID(),completion=vi.fn(fakeJointCompletion);
+ const result=await applyJointPlan(requestId,'one-click tester',completion);
+ expect(result).toMatchObject({fields:2,source:'NEBIUS'});
+ const count=await tx.workRecord.count({where:{kind:'cultivation'}}),saved=await tx.center.findMany({orderBy:{id:'asc'}});
+ expect(count).toBe(2);
+ expect(await applyJointPlan(requestId,'one-click tester',completion)).toMatchObject({fields:2,alreadyApplied:true});
+ expect(completion).toHaveBeenCalledTimes(2);
+ expect(await tx.center.findMany({orderBy:{id:'asc'}})).toEqual(saved);
+ await expect(applyJointPlan(requestId,'other operator',completion)).rejects.toThrow(/다른 담당자|ID 충돌/);
+}));

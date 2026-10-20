@@ -1,0 +1,52 @@
+import {expect,it} from 'vitest';
+import {randomUUID} from 'node:crypto';
+import type {PrismaClient} from '@prisma/client';
+import {db} from '../lib/db';
+import {preparedFixture} from './prepared-batch-fixture';
+import {planPreparedBatch} from '../lib/prepared-batch-retirement';
+import {retirePreparedBatch,restorePreparedBatch} from '../lib/prepared-batch-store';
+import {readRetirementSnapshot} from '../lib/demo-retirement-store';
+import {createHash} from 'node:crypto';
+import {registrationCommand,saveRegistration} from '../lib/registration-service';
+import {intakeField} from '../lib/registration-intake';
+import {emptyCenter} from '../lib/center-registry';
+it('archives atomically, releases owned reservations, preserves unrelated raw values and ledgers, then restores exactly',async()=>{
+ if(!process.env.DATABASE_URL?.endsWith('/kfarm_test'))throw Error('Isolated test database required');
+ const marker='ROLLBACK_PREPARED_TEST';
+ await expect(db.$transaction(async tx=>{
+  const f=preparedFixture();await tx.workRecord.deleteMany({where:{workspace:{in:['sandbox','shared']}}});await tx.outbox.deleteMany({where:{centerId:'demo'}});await tx.receipt.deleteMany();
+  await tx.center.upsert({where:{id:'demo'},create:{id:'demo',version:4,state:f.state as any},update:{version:4,state:f.state as any}});
+  await tx.workRecord.createMany({data:f.records as any});
+  await tx.$executeRaw`UPDATE "Center" SET state=state || '{"precisionProbe":123.1234567890123456789}'::jsonb WHERE id='demo'`;
+  await tx.$executeRaw`UPDATE "WorkRecord" SET payload=jsonb_set(payload,'{1,area}','123.1234567890123456789'::jsonb) WHERE workspace='sandbox' AND kind='fields' AND id='current'`;
+  const before=await readRetirementSnapshot(tx),plan=planPreparedBatch(before,'demo',f.batchId),budget=await tx.aiBudget.findMany(),calls=await tx.aiCall.count();expect(plan.safe,JSON.stringify(plan.blockers)).toBe(true);
+  const client={$transaction:(callback:any)=>callback(tx)} as PrismaClient,b={id:randomUUID(),centerId:'demo',batchId:f.batchId,token:plan.token,confirmation:'ARCHIVE_PREPARED_INPUTS' as const};
+  await expect(retirePreparedBatch(client,{...b,token:'b'.repeat(64)},'test')).rejects.toThrow('STALE');
+  await retirePreparedBatch(client,b,'test');expect((await retirePreparedBatch(client,b,'test')).alreadyApplied).toBe(true);
+  const after=await readRetirementSnapshot(tx),center=after.centers.find(r=>JSON.parse(r).id==='demo')!,state=JSON.parse(center).state;
+  expect(center).toContain('123.1234567890123456789');expect(state.fields.map((f:any)=>f.id)).toEqual([f.other]);expect(state.missions).toEqual([]);expect(state.machines).toEqual(f.state.machines);expect(state.productionLedger.entries[f.other]).toEqual(f.state.productionLedger!.entries[f.other]);expect(state.productionLedger.totals).toEqual({'REGISTERED:POTATO:2027':{low:200,high:300}});
+  const inv=after.records.find(r=>JSON.parse(r).kind==='fields')!;expect(inv).toContain('123.1234567890123456789');expect(JSON.parse(inv).payload).toHaveLength(1);
+  const labor=JSON.parse(after.records.find(r=>JSON.parse(r).kind==='laborOperations')!).payload;expect(labor.jobs).toEqual([]);expect(labor.people).toEqual([{id:'worker',name:'기존 인력'}]);expect(await tx.workRecord.count({where:{workspace:'shared',kind:'resourceReservation',id:'booking'}})).toBe(0);
+  expect(await tx.aiBudget.findMany()).toEqual(budget);expect(await tx.aiCall.count()).toBe(calls);
+  await restorePreparedBatch(client,b.id,'test');expect(await readRetirementSnapshot(tx)).toEqual(before);expect((await restorePreparedBatch(client,b.id,'test')).alreadyRestored).toBe(true);
+  const next={...b,id:randomUUID()};await retirePreparedBatch(client,next,'test');await tx.workRecord.create({data:{workspace:'sandbox',kind:'manual-note',id:'after-retire',payload:{preserve:true}}});await expect(restorePreparedBatch(client,next.id,'test')).rejects.toThrow('변경');
+  throw Error(marker);
+ },{timeout:30000})).rejects.toThrow(marker);
+});
+it('retires an ordinary registration with sealed input provenance, then admits new ordinary input through the same service',async()=>{
+ if(!process.env.DATABASE_URL?.endsWith('/kfarm_test'))throw Error('Isolated test database required');
+ const marker='ROLLBACK_COMMON_REGISTRATION';
+ await expect(db.$transaction(async tx=>{
+  await tx.workRecord.deleteMany({where:{workspace:'sandbox'}});await tx.outbox.deleteMany({where:{centerId:'demo'}});await tx.receipt.deleteMany();
+  await tx.center.upsert({where:{id:'demo'},create:{id:'demo',state:emptyCenter('demo') as any},update:{state:emptyCenter('demo') as any}});
+  const batchId=randomUUID(),{geometry,selected,...field}=intakeField('5274036023100000097','검증용 입력 주소');
+  const command=registrationCommand.parse({requestId:randomUUID(),consultationId:randomUUID(),consultationVersion:0,fieldVersion:0,testDataOnly:true,demoInputBatchId:batchId,consultation:{farmer:{name:'검증 신청',birth:'1960-01-01',phone:'000-0000-0000',contact:'phone'},fields:[{...field,area:'1000'}],consent:true,step:3}});
+  await tx.workRecord.create({data:{workspace:'sandbox',kind:'demoInputBatch',id:batchId,payload:{version:'demo-registration-inputs-v1',id:batchId,centerId:'demo',status:'READY',registrations:[{requestId:command.requestId,inputHash:createHash('sha256').update(JSON.stringify(command)).digest('hex')}]}}});
+  await saveRegistration(tx,command,'test');const plan=planPreparedBatch(await readRetirementSnapshot(tx),'demo',batchId);expect(plan.safe).toBe(true);
+  await retirePreparedBatch({$transaction:(f:any)=>f(tx)} as PrismaClient,{id:randomUUID(),centerId:'demo',batchId,token:plan.token,confirmation:'ARCHIVE_PREPARED_INPUTS'},'test');
+  const inventory=await tx.workRecord.findUniqueOrThrow({where:{workspace_kind_id:{workspace:'sandbox',kind:'fields',id:'current'}}});
+  const {demoInputBatchId,...ordinary}=command;
+  const result=await saveRegistration(tx,{...ordinary,requestId:randomUUID(),consultationId:randomUUID(),fieldVersion:inventory.version},'test');expect(result.fields).toBe(1);expect(await tx.workRecord.count({where:{workspace:'sandbox',kind:'registrationOrigin'}})).toBe(0);
+  throw Error(marker);
+ },{timeout:30000})).rejects.toThrow(marker);
+});

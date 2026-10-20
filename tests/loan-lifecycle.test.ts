@@ -53,7 +53,7 @@ it('stores notices for both centers, keeps acknowledgements local, and records f
  await markSharedFailure(tx,loan.machineId,loan.usableFrom,'demo',owner.id);
  expect((await notices()).some(r=>r.workspace==='center:janggye'&&(r.payload as any).event==='FAILURE')).toBe(true);
  expect(permitted({...owner,role:'CENTER_STAFF'},'center-resources','POST',{action:'ackNotice'})).toBe(true);
- expect(permitted({...owner,role:'CENTER_STAFF'},'center-resources','POST',{action:'manageLoan'})).toBe(false);
+ expect(permitted({...owner,role:'CENTER_STAFF'},'center-resources','POST',{action:'manageLoan'})).toBe(true);
 }));
 
 it('limits automatic lending by the owner operator pool, not available general workers',async()=>isolated(async tx=>{

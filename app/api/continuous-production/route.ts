@@ -5,7 +5,7 @@ import {centerDefinition} from '@/lib/center-registry';
 import {db} from '@/lib/db';
 import {withAuth} from '@/lib/auth-route';
 import {actorLabel,currentPrincipal} from '@/lib/auth';
-import {canConfirmProduction} from '@/lib/auth-policy';
+import {canConfirmProduction,isCenterOperator} from '@/lib/auth-policy';
 import {productionCriteria,serviceTerm} from '@/lib/continuous-production';
 import {productionKey,lockProduction,readProductionSource,refreshProduction,approveProduction,changeParticipation} from '@/lib/production-service';
 import {reviewProductionCrop,returnToRuleReview} from '@/lib/production-ai-review';
@@ -22,7 +22,7 @@ const command=z.discriminatedUnion('action',[
 export const GET=withAuth('continuous-production',async()=>{
  const result=await db.$transaction(async tx=>{
   const source=await readProductionSource(tx),row=await tx.workRecord.findUnique(productionKey('continuousProduction')),criteria=await tx.workRecord.findUnique(productionKey('productionCriteria'));
-  return {view:row?.payload??null,criteria:source.criteria,criteriaVersion:criteria?.version??0,canManage:currentPrincipal()?.role==='CENTER_ADMIN',canApprove:canConfirmProduction(currentPrincipal(),row?.payload),center:centerDefinition(activeCenterId()),demoSourceBatchId:source.state?.demoResourceBatchId??(activeCenterId()==='demo'?'crop30-local-input':null)};
+  return {view:row?.payload??null,criteria:source.criteria,criteriaVersion:criteria?.version??0,canManage:isCenterOperator(currentPrincipal()),canApprove:canConfirmProduction(currentPrincipal(),row?.payload),center:centerDefinition(activeCenterId()),demoSourceBatchId:source.state?.demoResourceBatchId??(activeCenterId()==='demo'?'crop30-local-input':null)};
  });
  return NextResponse.json(result);
 });

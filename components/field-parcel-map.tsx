@@ -1,4 +1,5 @@
 'use client';
+import {addressText} from '@/lib/display-language';
 import {cropEnglishName} from '@/lib/crop-registry';
 import {useEffect,useRef,useState} from 'react';
 import {loadParcelBoundaries} from '@/lib/parcel-boundary-loader';
@@ -19,7 +20,7 @@ export default function FieldParcelMap({fields}:{fields:Field[]}){
    if(!abort.signal.aborted)boundaryCache.current.set(id,d.geometry);return d.geometry;
   },abort.signal);
   if(abort.signal.aborted)return;
-  setFeatures(result.items.map(({id,value})=>{const f=fields.find(f=>f.id===id)!;return {geometry:value,label:(f.address.match(/\S+(?:리|동)\s+.+$/)?.[0]??f.address)+' · '+(ko?f.crop:cropEnglishName(f.crop??'')),color:(({쌀:'#b8e291',감자:'#efd09e',고추:'#efa5a5'} as Record<string,string>)[f.crop??'']??'#b8e291')}}));
+  setFeatures(result.items.map(({id,value})=>{const f=fields.find(f=>f.id===id)!;return {geometry:value,label:addressText(f.address.match(/\S+(?:리|동)\s+.+$/)?.[0]??f.address,ko?'ko':'en')+' · '+(ko?f.crop:cropEnglishName(f.crop??'')),color:(({쌀:'#b8e291',감자:'#efd09e',고추:'#efa5a5'} as Record<string,string>)[f.crop??'']??'#b8e291')}}));
   setFailed(result.failed.length);setLoading(false);
  })();return()=>abort.abort();
  },[ids,ko]);

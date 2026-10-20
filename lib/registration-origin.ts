@@ -11,11 +11,15 @@ export const demoInputBatchSchema=z.object({
  status:z.enum(['READY','CLOSED']),
  registrations:z.array(z.object({requestId:z.string().uuid(),inputHash:z.string().regex(/^[a-f0-9]{64}$/)}).strict()).min(1).max(1000),
 }).strict().refine(b=>new Set(b.registrations.map(r=>r.requestId)).size===b.registrations.length,'Duplicate demo request');
-const originSchema=z.object({
+export const originSchema=z.object({
  version:z.literal('registration-origin-v1'),dataOrigin:z.literal('SYNTHETIC'),batchId:z.string().uuid(),
  consultationId:z.string().uuid(),requestId:z.string().uuid(),inputHash:z.string().regex(/^[a-f0-9]{64}$/),
  pnus:z.array(z.string().regex(/^\d{19}$/)).min(1),actorId:z.string().min(1),registeredAt:z.string(),
 }).strict();
+
+export function syntheticRegistrationPnus(payloads:unknown[]){
+ return new Set(payloads.flatMap(payload=>originSchema.parse(payload).pnus));
+}
 
 export async function authorizeDemoRegistration(tx:Prisma.TransactionClient,batchId:string,requestId:string,inputHash:string){
  await tx.$queryRaw`SELECT id FROM "WorkRecord" WHERE workspace=${recordSpace()} AND kind='demoInputBatch' AND id=${batchId} FOR UPDATE`;

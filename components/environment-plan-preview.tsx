@@ -1,4 +1,5 @@
 'use client';
+import {addressText} from '@/lib/display-language';
 import {useEffect,useState} from 'react';
 import {useLanguage} from './language';
 export default function EnvironmentPlanPreview(){
@@ -15,7 +16,7 @@ export default function EnvironmentPlanPreview(){
  }catch(e){setError(String(e));}finally{setBusy(false);}}
  return <details className="card section-space"><summary>{t('환경 기준 → 계획·배차 미리보기','Environment → plan and dispatch preview')}</summary>
  <p>{t('저장된 검토 기준과 농지로 공통 계획 엔진을 실행합니다. 기존 계획·실적·수동 지정 날짜는 보존합니다.','Use reviewed standards and registered fields in the common planner. Existing plans, history and explicit dates are preserved.')}</p>
- <label>{t('농지','Field')} <select value={pnu} onChange={e=>setPnu(e.target.value)}><option value="">—</option>{fields.map(f=><option key={f.pnu} value={f.pnu}>{f.address}</option>)}</select></label>
+ <label>{t('농지','Field')} <select value={pnu} onChange={e=>setPnu(e.target.value)}><option value="">—</option>{fields.map(f=><option key={f.pnu} value={f.pnu}>{addressText(f.address,locale)}</option>)}</select></label>
  <label>{t('검토된 작형','Reviewed practice')} <select value={profile} onChange={e=>setProfile(e.target.value)}><option value="">—</option>{profiles.map(p=><option key={p.id} value={p.id}>{p.profile.scope==='COMMON'?t('공통','Common'):p.profile.region} · {p.profile.practice} · {p.profile.variety}</option>)}</select></label>
  <label>{t('관측소 평년자료','Station normals')} <select value={dataset} onChange={e=>setDataset(e.target.value)}><option value="">—</option>{datasets.map(d=><option key={d.id} value={d.id}>{d.station} · {d.period}</option>)}</select></label>
  <label>{t('재배 검토 시작','Season from')} <input type="date" value={from} onChange={e=>setFrom(e.target.value)}/></label><label>{t('재배 검토 종료','Season until')} <input type="date" value={to} onChange={e=>setTo(e.target.value)}/></label>

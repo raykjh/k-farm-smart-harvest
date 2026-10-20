@@ -16,11 +16,12 @@ it('compares the crop mix with actual common dispatch and leaves all source data
  const ai=await adviseJointPlan(snapshot,baseline,completion);
  expect(completion).toHaveBeenCalledTimes(2);expect(ai.selected.status).toBe('REVIEW_READY');expect(ai.selected.metrics.readyFields).toBe(2);
  expect(JSON.stringify(completion.mock.calls[0])).toContain('EVERY evaluated ID as a required key');
- expect(ai.contract).toBe('joint-crop-resources-v5');
+ expect(ai.contract).toBe('joint-crop-resources-v6');
  expect(ai.evidenceOrigin).toBe('SERVER_METRIC_REFERENCES_V1');expect(ai.modelReferences.evidence).toEqual(['missingTasks']);
  expect(ai.selected.mix).toHaveLength(2);expect(ai.selected.metrics.largestCropShare).toBe(.5);expect(baseline.metrics.largestCropShare).toBe(1);
  expect(ai.selected.metrics.meanSuitability).toBe(baseline.metrics.meanSuitability);expect(ai.selected.metrics.personHours).toBeGreaterThan(baseline.metrics.personHours);
- expect(source).toEqual(before);expect(ai.selected.reserved).toBe(false);expect(ai.selected.costEstimate).toBeNull();
+ expect(source).toEqual(before);expect(ai.selected.reserved).toBe(false);expect(ai.selected.costEstimate).toEqual({basis:'REFERENCE_SCENARIOS_NOT_NET_PROFIT',complete:false,assessedFields:0});
+ expect(ai.selected.metrics.unfavorableBalanceWon).toBeNull();expect(ai.selected.economics.every(e=>!e.assessment.comparable)).toBe(true);
  const evaluated=new Map([[baseline.id,baseline],[ai.selected.id,ai.selected]]),refs=new Map([['E0',baseline.id],['E1',ai.selected.id]]);
  const rows=jointComparisonRows(evaluated,refs);
  for(const [selectedRef,id] of refs){const row=rows[selectedRef][0],other=evaluated.get(refs.get(row.evaluationId)!)!;expect(row.selected).toBe(evaluated.get(id)!.metrics[row.metric]);expect(row.alternative).toBe(other.metrics[row.metric]);}
@@ -61,6 +62,15 @@ it('binds model-selected metric references to exact values without accepting cop
  expect(groundJointSelection(valid,evaluated,refs).decision.tradeoffs[0]).toEqual({evaluationId:other.id,metric:'missingTasks',selected:0,alternative:1});
  expect(()=>groundJointSelection({...valid,tradeoffs:[...valid.tradeoffs,...valid.tradeoffs]},evaluated,refs)).toThrow('누락');
  expect(()=>groundJointSelection({...selection,evaluationId:'E1',tradeoffs:[{evaluationId:'E0',metric:'missingTasks'}]},evaluated,refs)).toThrow('필수 작업');
+});
+it('rejects metric names used as assessment keys with a concise error and without silently dropping them',async()=>{
+ const snapshot=await collectJointSnapshot([jointSource()],['demo']),baseline=await evaluateJointProposal(snapshot,jointRuleProposal(snapshot));
+ const evaluated=new Map([[baseline.id,baseline]]),refs=new Map([['E0',baseline.id]]);
+ expect(()=>groundJointAssessment({evaluationId:'E0',assessments:{E0:'readyFields',readyFields:'readyFields'}},evaluated,refs)).toThrow('AI 비교 결과 형식을 확인하지 못해 저장하지 않았습니다.');
+ const wire=jointWireTools(snapshot,refs.keys())[1].function;
+ expect(wire.parameters.properties.assessments.maxProperties).toBe(1);
+ expect(Object.keys(wire.parameters.properties.assessments.properties)).toEqual(['E0']);
+ expect(wire.description).toContain('Metric names are VALUES ONLY, never keys');
 });
 it('requires one named choice per field in the actual model schema, without filling missing choices from rules',async()=>{
  const snapshot=await collectJointSnapshot([jointSource('demo',3)],['demo']),proposal=jointRuleProposal(snapshot);
@@ -140,7 +150,9 @@ it('uses the same four-center constraints; no private field details leak in the 
  const view=JSON.stringify(jointPublicView({input:{requestId:'test',audience:'network'},selected,baseline:selected,source:'RULES',status:'READY'}));
  expect(view).not.toContain('PRIVATE');expect(view).not.toContain('consultation');expect(view).not.toContain(sources[0].fields[0].pnu);
  const p={id:'test',username:'test',name:'test',role:'CENTER_STAFF',centerId:'demo'} as any;
- expect(permitted(p,'integrated-planning','GET',null)).toBe(true);expect(permitted(p,'integrated-planning','POST',{action:'plan'})).toBe(false);
+ expect(permitted(p,'integrated-planning','GET',null)).toBe(true);expect(permitted(p,'integrated-planning','POST',{action:'plan'})).toBe(true);
+ expect(permitted(p,'integrated-planning','POST',{action:'apply'})).toBe(true);
+ expect(permitted({...p,centerId:'unknown'},'integrated-planning','POST',{action:'apply'})).toBe(false);
  expect(permitted({...p,role:'CENTER_ADMIN'},'integrated-planning','POST',{action:'stage'})).toBe(true);
  expect(permitted({...p,role:'SUPER_ADMIN',centerId:null},'integrated-planning','POST',{action:'stage'})).toBe(false);
 });
