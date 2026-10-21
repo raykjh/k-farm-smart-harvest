@@ -23,6 +23,18 @@ Before judging, the owner must confirm an adequate remaining inference allowance
 
 The October 21 application baseline is public commit `5fa3e3415ba6e199bd5855744b8d0180b10ce34f` and image `kfarm-judge-web:20261021-r1` for both web and operations. Later documentation commits do not imply a different runtime. Retain the preceding image and private restore evidence.
 
-Submission wording, evidence and the revised recording are being reconciled before the final freeze. Existing price/cost/climate references and the participating-center national view are implemented; nationwide optimization, autonomous hardware, actual SMS/payroll and settlement remain future work. Do not expand application scope during this presentation revision.
+The revised video and story were saved to Devpost on October 21; the entry remained **SUBMITTED, 5/5 steps done**, and the public page embedded the new video. Development and public source matched before filming; runtime code matched the deployment manifest. All new application footage was captured at `https://kfarm.1gaji.com`. The older isolated review apps were excluded and stopped after their protected records were verified unchanged.
 
-After the owner's screen review and revised recording, verify that the story, video, judge guide, public source and runtime describe the same released behavior. Record the final source commit, image and source digests, reference versions, starting-data snapshot and video URL/hash in the release record. Preserve the evidence and keep the reviewed judge environment fixed after final submission. Do not call a documentation update or the older October 19 checkpoint the final freeze.
+The final submission source is retained at [judge-submission-20261021-r1](https://github.com/raykjh/k-farm-smart-harvest/tree/judge-submission-20261021-r1). Treat this tag, the current image and the published media as the judging baseline. Future development continues separately and must not overwrite this release tag or replace the judging image/media without an explicit release decision. Normal operational database records, sessions and the canonical cost ledger remain live; the freeze is not a database rollback or a new inference allowance.
+
+| Release evidence | Fixed value |
+|---|---|
+| Runtime application commit | `5fa3e3415ba6e199bd5855744b8d0180b10ce34f` |
+| Web and operations image | `kfarm-judge-web:20261021-r1` |
+| Local Docker image ID | `sha256:d31090cd0a21afe3cfa7f68385af42bd7a5c6ffaa5e5900bf07193511a66d118` |
+| Deployed 917-file source manifest | `67ff2a0c45007dc976315c39d321b72132e15f5b234324e64a512fcabc5155ba` |
+| Current video | [176-second public recording](https://youtu.be/gq45y38CqxM) |
+| MP4 SHA-256 | `b619f4b456a30e57b05b94343378cb5ced434e962f0e30d4d823bb9e93b515ed` |
+| Filmed data snapshot | 2027: 4 centers, 301 cultivations, 53.3 ha; retained release snapshot: 301 fields / 1,791 planned tasks |
+
+Reference data and test scopes retain their dates in [verification](verification.md). The original October 18 film and October 20 raw verification records remain historical evidence. Price/cost/climate references and the participating-center national view are implemented; nationwide optimization, autonomous hardware, actual SMS/payroll and settlement remain future work. No application redeployment or operating-data restore was required for this media/document revision.

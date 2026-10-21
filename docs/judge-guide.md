@@ -2,6 +2,8 @@
 
 Updated October 21, 2026 for the current hosted interface. Open [the hosted demonstration](https://kfarm.1gaji.com). English and a restricted judge account are prefilled; click **Sign in**. No personal account, provider login or API key is needed. The language selector switches Korean/English, including equipment labels and displayed addresses.
 
+The [176-second English video](https://youtu.be/gq45y38CqxM) records this same public application and release. Its October 20 A/B comparison is a dated evidence summary, not footage from an older local application or a new public-server execution. The submitted source is retained at `judge-submission-20261021-r1`; ordinary operational DB records may continue to change.
+
 ## Inspect the saved results
 
 1. **Field management → Manage** opens a parcel's details, crop / production and work history. These views read saved records. Opening a field or reloading a page does not request new inference.
@@ -20,10 +22,10 @@ For a new case, register fictional applicant and parcel inputs with complete rev
 
 To test an exception, open a task's **Manage → Reschedule**, enter a reason and optionally a preferred date. For an equipment issue, choose the machine and repair period. This command validates and saves the selected change; reload afterward to inspect persistence. Existing completed work and unrelated center commitments are protected. Resource shortages remain requests when equipment or confirmed labor cannot be secured.
 
-The server uses NVIDIA Nemotron through Nebius Token Factory, under a small shared spending cap. Live inference can be unavailable if the approved budget is exhausted or the provider is unavailable. This must be shown as an error, not a fabricated AI success; the saved evidence and [public video](https://youtu.be/2abo7PjQH_I) remain available. A selected plan equal to the deterministic baseline is not an improvement claim.
+The server uses NVIDIA Nemotron through Nebius Token Factory, under a small shared spending cap. Live inference can be unavailable if the approved budget is exhausted or the provider is unavailable. This must be shown as an error, not a fabricated AI success; the saved evidence and [public video](https://youtu.be/gq45y38CqxM) remain available. A selected plan equal to the deterministic baseline is not an improvement claim.
 
 Use fictional applicant details only. People, ownership assumptions and resources are synthetic; real cadastral references do not prove ownership. No real SMS, payroll, equipment command, purchase or hiring is executed. This is a policy proposal and supervised operational MVP, not field certification or a national production/price forecast.
 
-The evidence distinguishes current implementation, the October 18 film, the October 19 hosted check and the October 20 isolated comparison. Rejected model answers remain failures; they are not counted as successful applications.
+The evidence distinguishes the October 21 public-app recording, the October 18 workflow film, the October 19 hosted check and the October 20 isolated comparison. Rejected model answers remain failures; they are not counted as successful applications.
 
 Maintainer: follow the [judge operations checklist](judge-operations.md). Preserve the business DB and canonical AI ledger across updates, use the same reviewed source image for web and background workers, and retain the previous image for rollback. Do not reset a database, rotate secrets or replenish a budget as part of a routine source update.

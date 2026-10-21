@@ -2,6 +2,8 @@
 
 These are retained **actual NVIDIA Nemotron / Nebius Token Factory calls**, not scripted model responses. They use fictional applicants, resources and reviewed-condition assumptions. Each case names its date and execution environment. They establish bounded software behavior, not field productivity, a national production target or farm profitability.
 
+The [October 21 submission video](https://youtu.be/gq45y38CqxM) records the current public judge application. It presents the paired October 20 results below as a dated evidence table. It does not film the isolated test applications or portray their results as a fresh public-server execution.
+
 ## Latest paired crop decision — October 20, 2026
 
 The same 1,000 m² test field and reviewed-condition assumptions were evaluated in two isolated databases. Equipment availability was the intended changed input. The model called the calculation tool to assess alternatives before selecting a plan.
