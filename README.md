@@ -4,9 +4,15 @@ K-Farm is an AI-assisted shared farming system for township support centers. It 
 
 This is an **operational MVP and a policy proposal**, not an adopted government program or a field-certified autonomous farming service. The same business paths process ordinary inputs and synthetic evaluation inputs; demonstrations do not substitute fixed outcomes for registration, scheduling or approval.
 
-## Capabilities
+## Judge Quick Start
 
-Open the [hosted demonstration](https://kfarm.1gaji.com), or follow the [judge guide](docs/judge-guide.md). English and a restricted judge account are prefilled. Use **Schedule → 2027** for saved next-season work and **National overview → 2027** for the participating network. The [October 21 video](https://youtu.be/gq45y38CqxM) is a 176-second English walkthrough recorded entirely from this public application. It separately presents the dated potato/pepper [actual-model evidence](docs/ai-decision-evidence.md). The [October 18 workflow video](https://youtu.be/2abo7PjQH_I) remains historical evidence.
+Open the [public application](https://kfarm.1gaji.com), follow the **[English Judge Quick Start](docs/judge-guide.md)**, or watch the **[final 2:58 submission video](https://youtu.be/YRUgkQJirLM)**.
+
+The guide covers prefilled sign-in, saved-record inspection, **ten fictional applicant/parcel examples**, required field conditions, AI crop-plan application and the screens that change afterward. Use **2027** for next-season schedules and national totals. Begin with one example; results depend on the current shared records and available resources.
+
+The submitted application release remains `judge-submission-20261021-r1`. This guide/README update changes documentation only; the application, published video and Devpost wording are unchanged. The database stays open for normal judge testing.
+
+## Capabilities
 
 - Continuous farmer and parcel registration, linked cultivation records, and preservation of completed work as applications accumulate.
 - New land enrollment is delegation-only: center staff manage crop selection, equipment and labor planning. Worker enrollment is separate and does not require owning or registering a field; registering land never enrolls its owner as a worker. Legacy participation metadata remains readable without rewriting past agreements or completed work.
@@ -175,7 +181,7 @@ During screen refinement, existing demo history is preserved, not retrospectivel
 
 This source release contains the application, calculation engine, database schema, synthetic tests and installation instructions under Apache-2.0. It excludes actual API keys, operating databases, personal records, cached provider datasets, raw model logs and internal development handoffs. [Publication and data scope](docs/public-source-and-data.md) explains the boundary.
 
-The [Devpost entry](https://devpost.com/software/k-farm-smart-harvest), [current English video](https://youtu.be/gq45y38CqxM) and [NAS-hosted judge environment](https://kfarm.1gaji.com) use the October 21 application baseline. Development and published source were compared across all 917 released files before filming; runtime code matched the deployed source manifest. The video contains no older isolated-application footage. This does not expose the development PC or establish a field-production service.
+The [Devpost entry](https://devpost.com/software/k-farm-smart-harvest), [current English video](https://youtu.be/YRUgkQJirLM) and [NAS-hosted judge environment](https://kfarm.1gaji.com) use the October 21 application baseline. Development and published source were compared across all 917 released files before filming; runtime code matched the deployed source manifest. The video contains no older isolated-application footage. This does not expose the development PC or establish a field-production service.
 
 The current runtime is `kfarm-judge-web:20261021-r1` for both NAS web and background workers. The final submission baseline is retained as the `judge-submission-20261021-r1` release tag. Source-only installation/build checks, isolated browser tests and live NAS model/storage evidence are distinct checks, documented in [verification](docs/verification.md). Normal operational database records remain live; future development must not replace the fixed judging code or media. Maintain the NAS, provider connections and bounded AI allowance through judging as described in the [judge operations checklist](docs/judge-operations.md).
 
@@ -190,3 +196,4 @@ Original source is licensed under [Apache License 2.0](LICENSE), selected on 202
 K-Farm은 고령·소규모 농가를 지역 농업 지원센터가 함께 지원하면 어떨지 제안하는 운영 소프트웨어입니다. 실제 업무 구조를 구현하고 데모에서는 입력 자료만 가상으로 사용합니다. 작물계획은 담당자가 확정하며, 일정변경은 담당자가 재배치를 요청하면 내부 계산·AI 검증을 거쳐 예약과 안내 기록까지 함께 저장합니다. 장비 구매·외부 파견을 임의 실행하지는 않습니다.
 
 현재 공개 소스·영상·심사용 NAS와 실제 모델을 거쳐 저장되는 흐름을 확인했습니다. 이는 현장 운영 승인·실제 문자·장비 제어·정책 채택을 뜻하지 않습니다. [개발 배경](docs/farmland-policy-rationale-2026-10-08.md), [검증 범위](docs/verification.md), [공개 자료 범위](docs/public-source-and-data.md)를 참고하세요.
+
