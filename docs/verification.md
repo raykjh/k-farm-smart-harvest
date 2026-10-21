@@ -2,7 +2,18 @@
 
 K-Farm has been evaluated in isolated local databases and a separate hosted judge environment. These results establish specific software behaviors, not field safety, national optimization, actual equipment agreements or agricultural income improvements. Model-free tests and paid model evaluations are reported separately. The sections below are dated historical results, not a claim that every newer version received every earlier check.
 
-## Submission evidence summary — October 19, 2026
+## Current submission evidence — October 21, 2026
+
+- **Paired actual-model comparison:** with the same 1,000 m² synthetic reviewed field, available potato equipment led to potato (5 essential tasks, 10.75 person-hours); unavailable equipment led to pepper (7 tasks, 24.75 person-hours). Both were applied through the UI, saved to isolated databases and verified after a new login. Both matched the deterministic baseline. The [case record](ai-decision-evidence.md) reports the rejected attempt, unresolved labor and private NAS inference transport explicitly.
+- **Current hosted interface:** the October 21 Korean/English check confirmed the national view's crop, area, expected-output and progress focus, after removing the delay/labor/equipment column. The selected 2027 season showed four participating centers, 301 cultivations and 53.3 hectares. The retained business snapshot contains 301 fields and 1,791 tasks; these are plans, not completed farming activity.
+- **Reference coverage:** the hosted screens expose dated aT price observations, RDA crop-cost references and KMA live weather with selectable Jangsu 1991–2020 normals. Partial economics and unreviewed climate applicability are not treated as completed farm-profit or regional-suitability validation.
+- **Scale, separately:** isolated database loading and aggregation passed with 3,000 cultivations / 4 centers / 18,000 tasks and 30,000 cultivations / 40 synthetic centers / 180,000 tasks. The retained query-plus-aggregation timings were approximately 267–282 ms and 2,878–2,920 ms respectively on that local environment. These are not public deployment volumes, full AI-approval journeys, concurrent-user benchmarks or national statistical coverage. Both tests made zero paid model calls and zero operating-data writes.
+- **Source and deployment:** the current application source is public commit `5fa3e3415ba6e199bd5855744b8d0180b10ce34f`; the NAS web and operations image is `kfarm-judge-web:20261021-r1`. The source manifest has 917 files, with digest `67ff2a0c45007dc976315c39d321b72132e15f5b234324e64a512fcabc5155ba`. This documentation revision does not change the application image.
+- **Preservation and recovery:** the October 20 release retained 20 protected business-record kinds and all four center states; calculated continuous-production fingerprints/timestamps refreshed separately. A business-backup restore was checked in a separate database. Both isolated A/B databases were also backed up and read back, and an isolated restore matched their raw rows. The canonical AI ledger was not reset or replaced. These are bounded recovery checks, not proof of offsite disaster recovery.
+
+The current **Apply AI plans** button authorizes calculation, validation and application. Earlier descriptions of a separate preview/batch-approval screen below describe the interface at their stated date. See the current [judge guide](judge-guide.md) before trying a write action. The existing linked 174-second video is the October 18 recording until a revised recording is published; its counts must not be relabeled as the current dataset.
+
+## Historical submission evidence summary — October 19, 2026
 
 - **Actual AI:** [two traced decisions](ai-decision-evidence.md) connect crop/resource proposals and a compound incident to UI confirmation and stored effects. Both match the rule baseline; superiority is not established.
 - **Hosted workflow:** a fresh NAS intake, automatic Nebius review, approval and a model-backed date change reached persistent records on October 19, after incomplete synthetic field conditions were corrected. Six tasks, three equipment reservations and six labor-demand records were stored. No actual SMS or machinery action occurred.
@@ -12,13 +23,13 @@ K-Farm has been evaluated in isolated local databases and a separate hosted judg
 
 Later sections retain their original measured counts and notification behavior. In current operation owner SMS is disabled, and worker messages are recorded/queued rather than delivered by a carrier.
 
-## Final submission freeze checks — October 19, 2026
+## Earlier submission checkpoint — October 19, 2026
 
 - Regression suite: **198 test files / 855 tests passed; two files / five tests skipped**. Skips require private optional cadastral snapshots or retained model responses; they are not counted as passing.
 - Python solver suite: **56 passed**. TypeScript checking and the production build passed.
 - A newly created, isolated database completed the browser journey from two-field intake through crop/resource approval to a combined machine breakdown and worker absence, adjacent resource allocation, saved changes and attendance/center notice records. Existing operating records were preserved. This final rerun was **model-free**, made no inference charge and reported no page errors; it is separate from the retained actual-model evidence above.
 - The hosted web and operations containers restarted successfully. Four center records, 6,330 non-session work records and 373 outbox records retained exactly the same fingerprints. The canonical ledger retained 717 call records and unchanged cumulative reservation totals. The saved 2027 schedule remained accessible after restart; no database was reseeded.
-- The runtime remains the reviewed `20261019-v6` application snapshot. The final publication adds documentation and source-export checks, not a new deployed application version. New documentation is not claimed to be inside the earlier container digest.
+- At that checkpoint, the runtime was the reviewed `20261019-v6` application snapshot. The accompanying publication added documentation and source-export checks. The October 21 application version above supersedes that runtime; the earlier test counts remain dated evidence.
 
 These are point-in-time checks. They do not establish continuous uptime, an offsite restore, a new paid-model comparison or completed farming activity.
 

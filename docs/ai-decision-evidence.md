@@ -1,6 +1,29 @@
 # What the AI actually decided
 
-These are retained **actual NVIDIA Nemotron / Nebius Token Factory calls**, not scripted model responses. They use fictional applicants, resources and reviewed-condition assumptions. Both cases below belong to one isolated, persisted browser journey on October 18, 2026. They do not establish field productivity or national price forecasts.
+These are retained **actual NVIDIA Nemotron / Nebius Token Factory calls**, not scripted model responses. They use fictional applicants, resources and reviewed-condition assumptions. Each case names its date and execution environment. They establish bounded software behavior, not field productivity, a national production target or farm profitability.
+
+## Latest paired crop decision — October 20, 2026
+
+The same 1,000 m² test field and reviewed-condition assumptions were evaluated in two isolated databases. Equipment availability was the intended changed input. The model called the calculation tool to assess alternatives before selecting a plan.
+
+| Input condition | Actual model selection | Calculated comparison | Saved result |
+|---|---|---|---|
+| A: potato equipment available | Potato | Potato: 5 essential tasks, 10.75 person-hours. Pepper alternative: 7 tasks, 24.75 person-hours. | 1 cultivation, 5 tasks, 3 equipment reservations |
+| B: potato equipment unavailable | Pepper | Pepper: 7 essential tasks, 24.75 person-hours. Potato alternative: all 5 essential tasks unplaced. | 1 cultivation, 7 tasks, 1 equipment reservation |
+
+Both selected plans **matched the deterministic baseline**. The useful result is that changed operational feasibility changed the crop selection through actual tool-assisted inference and persisted business effects. It is not evidence that AI beat the baseline. The zero person-hours attached to the infeasible potato alternative is not a cheap feasible plan: its essential work could not be placed.
+
+The operator used **Apply AI plans**; the application calculated, validated and committed the result. Database inspection and a new browser login verified the saved crops and tasks. Replaying the same request added neither records nor inference. Each case preserved 66 pre-existing protected records and the other three centers; the expected field and continuous-production projections changed. Four unassigned labor entries in A and three in B remained unresolved demand, not confirmed staffing.
+
+**Execution boundary:** the application, solver, UI and business databases ran locally in isolation. A private test transport sent the inference requests through the existing NAS connection and canonical cost ledger to the actual model. This was not a fresh end-to-end test of the current public NAS application. The public source excludes that private transport, raw prompts, credentials, contacts and database dumps.
+
+An initial B attempt made three completions but returned unsupported extra selection keys and was rejected before application. After clarifying allowed response keys and the validation error, a new three-completion attempt passed without relaxing the contract. A used three completions: **nine in total including the failed attempt**, with a token-derived estimate of $0.003045 and conservative reservations of $0.309669. Neither amount is a provider invoice.
+
+**Economic boundary:** the potato case had a partial dated wholesale-price / RDA cost reference; pepper's matching economics were unknown. Farm-gate receipts, distribution deductions, actual labor/equipment rates and other cost components were incomplete. No profit ranking or economic superiority is claimed. Supply coverage was unassessed, so zero flagged supply-risk fields does not mean verified national balance.
+
+## Earlier connected journey — October 18, 2026
+
+The following two decisions belong to one isolated, persisted browser journey and remain separate historical evidence.
 
 ## 1. New application: choose crops and resource demand together
 

@@ -6,7 +6,7 @@ This is an **operational MVP and a policy proposal**, not an adopted government 
 
 ## Capabilities
 
-Open the [hosted demonstration](https://kfarm.1gaji.com), or follow the [judge guide](docs/judge-guide.md). English and a restricted judge account are prefilled. Next-season tasks are under **Schedule → 2027**, not today's dashboard. The [174-second video](https://youtu.be/2abo7PjQH_I) and [two actual-model decision cases](docs/ai-decision-evidence.md) provide a short introduction.
+Open the [hosted demonstration](https://kfarm.1gaji.com), or follow the [judge guide](docs/judge-guide.md). English and a restricted judge account are prefilled. Use **Schedule → 2027** for saved next-season work and **National overview → 2027** for the participating network. The [October 18 video](https://youtu.be/2abo7PjQH_I) is a 174-second historical workflow recording; the [actual-model evidence](docs/ai-decision-evidence.md) also includes the later paired potato/pepper decisions and their execution boundaries.
 
 - Continuous farmer and parcel registration, linked cultivation records, and preservation of completed work as applications accumulate.
 - New land enrollment is delegation-only: center staff manage crop selection, equipment and labor planning. Worker enrollment is separate and does not require owning or registering a field; registering land never enrolls its owner as a worker. Legacy participation metadata remains readable without rewriting past agreements or completed work.
@@ -15,6 +15,8 @@ Open the [hosted demonstration](https://kfarm.1gaji.com), or follow the [judge g
 - Confirmed equipment/labor sharing between directly adjoining centers without overwriting another center's commitments.
 - Operator-initiated automatic replanning after wind, breakdowns, delays or absence, saving validated changes and their downstream records together.
 - Persistent reservations, attendance reconfirmations, worker message queues, both-center records and actual-work/correction records. Historical owner-notification records are retained, but new owner SMS is disabled.
+- Dated aT price observations, RDA crop-cost references and KMA weather / selectable climate normals in the reference library. Crop, unit, source, period and review coverage remain explicit; incomplete farm receipts and costs do not become a profit estimate.
+- A national view of participating centers' crops, cultivation area, expected production and recorded progress, with region and season filters. It does not infer national demand or adequate production from participant records alone.
 
 The current scenario covers Gyebuk, Janggye, Cheoncheon and Gyenam in Jangsu, Korea. The catalog contains 30 crop types, but source coverage and field readiness differ. It is not a claim that every crop or region has certified operating parameters.
 
@@ -30,7 +32,7 @@ NVIDIA `nvidia/Nemotron-3_5-Lightning`, served through **Nebius Token Factory**,
 | Authorize changes | The operator's bounded rescheduling command, with version and availability checks repeated before commit |
 | Record effects | PostgreSQL transaction, reservations, audit trail and notification outbox |
 
-The model cannot invent equipment, change work windows, authorize borrowing or execute a machine. No feasible candidate means no model call. Approval and refresh reuse and revalidate a saved decision instead of paying for another inference. These checks demonstrate grounded decisions, not superiority over deterministic ranking or a national optimum.
+The model cannot invent equipment, change work windows, authorize borrowing or execute a machine. No feasible candidate means no model call. Inspecting or refreshing saved records does not request inference; replaying an applied request reuses its result. **Managed fields → Apply AI plans** is an explicit staff command that runs actual model planning, validates the decision and commits eligible plans. The background intake draft path retains its separate confirmation. These checks demonstrate grounded decisions, not superiority over deterministic ranking or a national optimum.
 
 The ordinary rescheduling screen needs a reason and an optional preferred date, not an AI checkbox or an alternative-selection workflow. It tries local vacancies, related local rearrangement and preauthorized adjacent equipment. A repair request first preserves each original workday with a compatible replacement. Model rationale stays in the audit record. If the available resources cannot satisfy the work window, a resource/condition request is saved; the system does not pretend that a purchase, worker attendance or farm work has occurred.
 
@@ -39,6 +41,16 @@ Equipment-to-manual conversion is disabled in ordinary rescheduling, including r
 After a connection interruption, **Check result** retrieves the saved request without another model call. A still-valid saved proposal can finish its approval after the old execution lease expires; otherwise the existing schedule is preserved and a separate new request is required. A failed delivery is not treated as a failed database commit.
 
 ## Current verification
+
+### Current release and paired comparison — 2026-10-20–21
+
+The hosted application baseline is source commit `5fa3e3415ba6e199bd5855744b8d0180b10ce34f`, running image `kfarm-judge-web:20261021-r1` for both web and operations. Korean/English inspection confirmed the revised national view: four participating centers, 301 cultivations and 53.3 hectares for 2027. The retained business snapshot has 301 fields and 1,791 planned tasks. Documentation changes after this code commit do not imply a new runtime image.
+
+Actual Nemotron calls selected **potato with suitable equipment available** (5 essential tasks, 10.75 person-hours) and **pepper when potato equipment was unavailable** (7 tasks, 24.75 person-hours) for the same 1,000 m² synthetic reviewed field. Both passed UI application, database storage and a new login in isolated local databases, using private NAS transport for actual inference and the existing ledger. Both matched the deterministic baseline. A rejected first attempt and unresolved labor remain visible in the [evidence](docs/ai-decision-evidence.md); this is not a new public-hosted end-to-end or profit-superiority claim.
+
+Separate isolated tests loaded and aggregated **3,000 and 30,000 cultivation records** without paid inference or operating-data writes. Those tests measure database loading/aggregation, not 30,000 AI approvals or nationwide coverage. Business-backup restore and record-preservation checks are documented with their limits in [verification](docs/verification.md).
+
+The dated checks below are historical evidence. They are not cumulative counts and are not automatically rerun for documentation changes.
 
 ### Deployed workflow check — 2026-10-19
 
@@ -76,7 +88,7 @@ Real SMS and hardware commands were **not** sent. External parcel/weather inputs
 
 Public geography is separate from fictional people, ownership assumptions and resource inputs. A displayed parcel does not establish ownership, consent or eligibility. KMA weather and VWorld parcel integrations use server-side credentials; missing, stale and simulated inputs must remain distinguishable.
 
-Labor → Text messages manages workforce allocation/reconfirmation notices, superseded reminders, and a three-attempt mock failure/retry history. Owner SMS is disabled; historical records remain. Workforce confirmations are recorded as SMS replies or phone responses. There is no farmer app view. With `KFARM_SMS_WORKER=1`, the running server reconciles the queue every minute without sending anything; otherwise use **Refresh scheduled messages**. Only current, due messages can be simulated, and simulation never confirms attendance. Provider credentials, a registered sender, real delivery receipts and inbound replies are not connected.
+Labor → Text messages lists work date, send date, recipient and status, with date filters, resend and staff status editing. It supports the workforce notice queue and recorded attendance responses. Owner SMS is disabled; historical records remain. With `KFARM_SMS_WORKER=1`, the running server reconciles the queue every minute without carrier delivery. No carrier credentials, registered sender, real delivery receipts or automatic inbound-reply adapter are connected. Recording a planned message does not confirm attendance or send an SMS.
 
 Notification delivery currently ends in a local provider record, not a carrier delivery receipt. Equipment task/zone payloads prepare an integration; they do not control a machine. Real deployment requires field safety procedures, agronomic validation, legal agreements, privacy review and production adapters.
 
@@ -147,8 +159,8 @@ To preserve previous four-center verification data, use a new `KFARM_FOUR_CENTER
 
 ## Judge walkthrough
 
-1. Register fictional applicant details and a parcel with complete, reviewed field conditions. The automatic worker prepares an AI crop/resource draft; refresh to read the saved draft without another call.
-2. Confirm the cultivation and inspect work periods, resources and reservations.
+1. Start with saved field details, Schedule → 2027 and National overview → 2027. The current [judge guide](docs/judge-guide.md) provides a read-only route through plans and references.
+2. To create a new decision, register fictional inputs with complete reviewed field conditions. **Apply AI plans** calculates, validates and saves eligible plans; it is not a preview. The automatic background draft route separately retains staff confirmation. Inspect the resulting cultivation, work periods, resources and reservations.
 3. Open a scheduled task, enter a reason and optional preferred date, then press **Reschedule**.
 4. Apply a controlled breakdown or compound incident. Observe date preservation using a substitute, or bounded replanning when needed.
 5. Check the saved result; candidate evaluation and validated model selection take place behind the same command, without separate comparison/approval screens.
