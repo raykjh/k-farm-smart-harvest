@@ -4,11 +4,11 @@ Updated October 21, 2026 for the current hosted interface. Open [the hosted demo
 
 ## Inspect the saved results
 
-1. **Managed fields → Manage** opens a parcel's details, crop / production and work history. These views read saved records. Opening a field or reloading a page does not request new inference.
+1. **Field management → Manage** opens a parcel's details, crop / production and work history. These views read saved records. Opening a field or reloading a page does not request new inference.
 2. **Schedule → 2027 → May or October** contains the saved next-season work. The 2026 dashboard can legitimately show no tasks today. Dates are not moved to today for the demonstration. Open task details to inspect equipment, labor demand and retained changes.
 3. **Equipment** keeps each machine's reservations and borrowing information inside its details. **Labor** distinguishes demand, pending replies and confirmed attendance. A next-year labor requirement is not a confirmed worker.
 4. **National overview → 2027** shows the participating centers' crop composition, area, expected output and recorded progress. The October 21 check showed four centers, 301 cultivation records and 53.3 hectares. These are participating-network totals, not a complete national census or proof of oversupply. The map and region/season filters work on that coverage.
-5. **Price information**, **Cost / economics** and **Climate information** expose the evidence used for review: dated aT price observations, RDA cost references, KMA weather and a selectable Jangsu 1991–2020 normals dataset. Coverage differs by crop. Wholesale prices are not farm receipts, and a selectable climate series has not automatically been approved for a center.
+5. **Prices**, **Costs and economics** and **Climate information** expose the evidence used for review: dated aT price observations, RDA cost references, KMA weather and a selectable Jangsu 1991–2020 normals dataset. Coverage differs by crop. Wholesale prices are not farm receipts, and a selectable climate series has not automatically been approved for a center.
 
 The [actual-model evidence](ai-decision-evidence.md) includes a paired October 20 case: potato with suitable equipment available; pepper when the potato equipment is unavailable. Both completed application, database storage and a new login in isolated test databases. The model selections matched the deterministic baseline. These records are documented evidence, not two additional fields claimed to exist in the public judge database.
 
