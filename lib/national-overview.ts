@@ -61,6 +61,13 @@ export function buildNationalOverview(centers:NationalCenterInput[],records:Nati
   const location=settings?.location,longitude=location&&Number.isFinite(location.longitude)&&location.longitude>=124&&location.longitude<=132?location.longitude:null,latitude=location&&Number.isFinite(location.latitude)&&location.latitude>=32&&location.latitude<=39?location.latitude:null;
   centerSummaries.push({id:center.id,name:state.name||center.id,longitude,latitude,version:center.version,rows:[...groups.values()].filter(g=>g.centerId===center.id).length});
  }
- const rows=[...groups.values()].sort((a,b)=>JSON.stringify([a.centerId,a.region,a.crop,a.origin,a.quarter]).localeCompare(JSON.stringify([b.centerId,b.region,b.crop,b.origin,b.quarter])));
+ return nationalResult([...groups.values()],centerSummaries,filter,today);
+}
+function nationalResult(input:NationalBucket[],centerSummaries:{id:string;name:string;longitude:number|null;latitude:number|null;version:number;rows:number}[],filter:NationalFilter,today:string){
+ const rows=input.sort((a,b)=>JSON.stringify([a.centerId,a.region,a.crop,a.origin,a.quarter]).localeCompare(JSON.stringify([b.centerId,b.region,b.crop,b.origin,b.quarter])));
  return {asOf:today,filter,coverage:'PARTICIPATING_CULTIVATIONS_ONLY' as const,unregisteredRegions:'UNCOUNTED' as const,rows,centers:centerSummaries,summary:{centers:rows.length?new Set(rows.map(r=>r.centerId)).size:0,cultivations:rows.reduce((n,r)=>n+r.cultivations,0),pendingPlans:rows.reduce((n,r)=>n+r.pendingPlans,0),approvedAreaM2:rows.reduce((n,r)=>n+r.approvedAreaM2,0),growingAreaM2:rows.reduce((n,r)=>n+r.growingAreaM2,0),harvestCompletedAreaM2:rows.reduce((n,r)=>n+r.harvestCompletedAreaM2,0),overdue:rows.reduce((n,r)=>n+r.overdue,0),missingYield:rows.reduce((n,r)=>n+r.missingYield,0)}};
+}
+/** Centers are disjoint, so only their privacy-safe buckets need to be retained. */
+export function combineNationalOverviews(parts:ReturnType<typeof buildNationalOverview>[],filter:NationalFilter,today:string){
+ return nationalResult(parts.flatMap(p=>p.rows),parts.flatMap(p=>p.centers),filter,today);
 }

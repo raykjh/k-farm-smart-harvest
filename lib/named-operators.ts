@@ -3,6 +3,7 @@ import {equipmentCode} from './equipment-code';
 import type {Mission,State} from './types';
 import {dateSlot,slotDate,type SchedulingJob,type ResourceOption} from './scheduling-engine';
 import {isClosedTask} from './task-lifecycle';
+import {workforceAvailable} from './permanent-workforce';
 
 const kind=z.enum(['DR','TR','RP','PS','CB','PD','SP','TV','SE','GC','RD','SD','HV']);
 export const operatorSchema=z.object({
@@ -29,6 +30,8 @@ export function withNamedOperators(state:State,job:SchedulingJob,mission:Pick<Mi
   const assigned=o.resource===mission.resourceId&&mission.operatorIds?.length===1?mission.operatorIds[0]:state.machines.find(m=>m.id===o.resource)?.defaultOperatorId;
   const operatorCandidates=state.operatorRoster!.filter(p=>p.active&&p.kinds.some(k=>k===code)&&(!assigned||count!==1||p.id===assigned)).map(p=>({id:p.id,allowed:o.allowed.filter(s=>{
    const date=slotDate(s),minute=480+((s%32+32)%32)*15;
+   const employee=state.permanentWorkforce?.workers.find(w=>w.operatorId===p.id);
+   if(state.permanentWorkforce&&(!employee||!Array.from({length:duration},(_,i)=>minute+i*15).every(m=>workforceAvailable(employee,date,m))||[...(state.laborCapacity?.outgoing??[]).filter(w=>w.status==='CONFIRMED'),...(state.laborCapacity?.absences??[])].some(w=>w.workerId===employee.workerId&&w.date===date&&w.startMinute<minute+duration*15&&minute<w.endMinute)))return false;
    return p.from<=date&&date<=p.until&&!p.excludedDates.includes(date)&&p.weekdays.includes(new Date(date+'T00:00:00Z').getUTCDay())&&p.startMinute<=minute&&minute+duration*15<=p.endMinute;
   })})).filter(p=>p.allowed.length);
   return {...o,operatorCandidates};

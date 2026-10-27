@@ -24,7 +24,9 @@ export function optionEconomics(source:ProductionSource,option:ProductionCandida
  const commodities=plan.plan.plots.map(p=>cropReferences.find(r=>r.id===p.referenceId)?.commodity);
  const planCommodity=commodities.length&&commodities.every(Boolean)&&new Set(commodities).size===1?commodities[0]!:null;
  const result=evaluateCropEconomics({areaM2:plan.plan.plots.reduce((n,p)=>n+p.area,0),crop:option.crop,commodity:option.coordination?.production.commodity??planCommodity,origin,
-  harvestPeriod:harvestPeriod(plan.plan),today:source.today,references:source.coordination.policy.economicReferences??[],tasks,payByYear:source.laborPayByYear,
+  // Crop-level statistical economics is not evidence for a reviewed variety,
+  // tree age or trial premium. Keep it unknown until matching references exist.
+  harvestPeriod:harvestPeriod(plan.plan),today:source.today,references:plan.plan.context.variety?[]:source.coordination.policy.economicReferences??[],tasks,payByYear:source.laborPayByYear,
   // A current annual rate must also cover every actual operator assignment in
   // that year. A partially covered year remains unknown; it is never extended.
   operatorPayByYear:Object.fromEntries((source.coordination.policy.operatorCostRates??[]).filter(r=>r.centerId===source.scopeId&&r.origin===origin&&r.checkedOn<=source.today&&source.today<=r.validUntil&&tasks.filter(t=>t.machineOperators>0&&Number(t.date.slice(0,4))===r.year).every(t=>r.checkedOn<=t.date&&t.date<=r.validUntil)).map(r=>[String(r.year),{year:r.year,hourlyWon:r.hourlyWon,halfDayWon:r.hourlyWon*4,policyVersion:r.policyVersion,source:r.sourceUrl}]))});

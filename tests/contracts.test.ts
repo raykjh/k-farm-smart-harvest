@@ -11,7 +11,7 @@ const api={...service,approve:(...args:Parameters<typeof service.approve>)=>asPr
 import type {State} from '../lib/types';
 // Uses isolated local demo database only. Never run with production credentials.
 beforeEach(async()=>{
- if(process.env.DATABASE_URL!=='postgresql://kfarm:kfarm_local_demo@127.0.0.1:55432/kfarm_test')throw new Error('Tests require isolated local test database');
+ const target=new URL(process.env.DATABASE_URL??'');if(target.hostname!=='127.0.0.1'||target.pathname!=='/kfarm_test'||!['55432','55433','55434'].includes(target.port))throw new Error('Tests require isolated local test database');
  await db.$transaction([db.outbox.deleteMany(),db.receipt.deleteMany(),db.audit.deleteMany(),db.center.deleteMany(),db.center.create({data:{id:'demo',state:initialState()}})]);
 });
 afterAll(async()=>{await db.$disconnect()});

@@ -13,7 +13,7 @@ export const cropGuidelines:Record<CropCode,{name:string;source:string;steps:Ste
  step('seed','육묘 또는 모 확보','정식 전'),step('soil','밭 준비·밑거름·두둑·피복','정식 전'),step('plant','모 순화·정식','늦서리 이후 지역 조건 확인','PROCESS','planting',[0,0]),step('stake','지주·유인','정식 후 조기 설치, 생장 중 보완'),step('fertilize','첫 웃거름 판단','정식 후 약 25~30일','CONDITIONAL','planting',[25,30]),step('care','제초·관수·배수·병해충 관찰','재배 기간 반복','INSPECTION'),step('fertilize-repeat','후속 웃거름 판단','이전 시비 후 약 30일 참고, 생육에 따라','CONDITIONAL'),step('harvest','완숙 고추 반복 수확','열매 성숙에 따라 회차 생성','REPEAT'),step('finish','회차별 건조·선별·반출','매 수확과 연계','REPEAT'),step('cleanup','잔재·피복·지주 정리','마지막 수확 후')]}
 };
 export type CropAnchors={planting?:string;heading?:string};
-export type GuidelineContext={region?:string;regionalProfile?:import('./regional-profile').RegionalProfile;catalog?:CatalogContext;anchors?:Partial<Record<CropCode,CropAnchors>>;operations?:Partial<Record<import('./crop-registry').SupportedCropCode,Record<string,import('./operation-requirements').OperationRule>>>};
+export type GuidelineContext={variety?:import('./crop-variety').VarietyReview;region?:string;regionalProfile?:import('./regional-profile').RegionalProfile;catalog?:CatalogContext;anchors?:Partial<Record<CropCode,CropAnchors>>;operations?:Partial<Record<import('./crop-registry').SupportedCropCode,Record<string,import('./operation-requirements').OperationRule>>>};
 export function guidelineTasks(crop:CropCode,year:number,context:GuidelineContext={},horizon?:{start:string;end:string}){
  const configured=context.operations?.[crop]??{};
  for(const code of Object.keys(configured))if(!cropGuidelines[crop].steps.some(s=>s.code===code))throw Error('알 수 없는 작업 단계: '+code);

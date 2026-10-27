@@ -1,5 +1,7 @@
 // Presentation only: never change saved task names, addresses, IDs or operator notes.
 const terms:Record<string,string>={
+ '참여 범위 생산 목표 초과 또는 근거 확인 필요':'Participant production limit exceeded or supporting evidence needs review',
+ '품종·보급 면적·과수 수령·수분 조건 확인 필요':'Review variety, seed availability, orchard age and pollination conditions',
  'AI 비교 결과 형식을 확인하지 못해 저장하지 않았습니다. 기존 계획은 유지됩니다.':'The AI comparison could not be validated. Nothing was saved; existing plans are unchanged.',
  '파종':'Sowing','겨울 전정':'Winter pruning','개화·착과 관리':'Flowering and fruit-set management','적과·생육 관리':'Fruit thinning and growth management','수관·약제·수확 전 안전간격·안전작업 확인':'Check canopy, product, pre-harvest interval and safe work conditions','숙도 확인·수확':'Maturity check and harvest','수확 후 과원 정리':'Post-harvest orchard cleanup',
  '쌀':'Rice','감자':'Potato','고추':'Pepper','콩':'Soybean','보리':'Barley','밀':'Wheat','옥수수':'Maize','고구마':'Sweet potato','팥':'Adzuki bean','참깨':'Sesame','들깨':'Perilla','땅콩':'Peanut','마늘':'Garlic','양파':'Onion','배추':'Napa cabbage','무':'Radish','대파':'Welsh onion','양배추':'Cabbage','당근':'Carrot','상추':'Lettuce','시금치':'Spinach','브로콜리':'Broccoli','생강':'Ginger','단호박':'Winter squash','수박':'Watermelon','사과':'Apple','배':'Pear','복숭아':'Peach','포도':'Grape','자두':'Plum',

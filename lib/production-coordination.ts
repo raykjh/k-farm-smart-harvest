@@ -3,13 +3,15 @@ import {cropCodeSchema,type SupportedCropCode} from './crop-registry';
 import {supplySignal,type Range} from './crop-reference';
 import {economicReferencesSchema} from './crop-economics';
 import {nationalReferencesSchema} from './production-evidence';
+import {productionLimitsSchema} from './production-limits';
 
-export const coordinationVersion='production-coordination-v3';
+export const coordinationVersion='production-coordination-v4';
 const day=z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(v=>Number.isFinite(Date.parse(v))&&new Date(v).toISOString().slice(0,10)===v);
 const text=z.string().trim().min(1).max(500);
 const range=z.object({low:z.number().finite().nonnegative(),high:z.number().finite().nonnegative()}).strict().refine(v=>v.low<=v.high);
 const evidence={sourceUrl:z.string().url().refine(v=>v.startsWith('https://')),method:text,checkedOn:day,validUntil:day};
 export const coordinationPolicySchema=z.object({
+ planningLimits:productionLimitsSchema.optional(),
  yields:z.array(z.object({crop:cropCodeSchema,commodity:text,kgPer1000m2:range,...evidence}).strict()).max(30),
  targets:z.array(z.object({commodity:text,year:z.number().int().min(2000).max(2200),kg:z.number().positive().finite(),origin:z.enum(['REGISTERED','DEMO']),...evidence}).strict()).max(300),
  specialties:z.array(z.object({centerId:z.string().min(1).max(80),crop:cropCodeSchema,status:z.enum(['ESTABLISHED','DEVELOPMENT_CANDIDATE']),bonus:z.number().min(0).max(5),...evidence}).strict()).max(300),
@@ -42,7 +44,7 @@ export const coordinationPolicySchema=z.object({
 });
 export type CoordinationPolicy=z.infer<typeof coordinationPolicySchema>;
 export const emptyCoordinationPolicy=():CoordinationPolicy=>({yields:[],targets:[],specialties:[]});
-export type ProductionContribution={id:string;centerId:string;crop:SupportedCropCode;areaM2:number|null;year:number|null;commodity:string|null;kg:Range|null;origin:'REGISTERED'|'DEMO';basis:string;harvestPeriod?:{from:string;to:string}|null};
+export type ProductionContribution={varietyId?:string;id:string;centerId:string;crop:SupportedCropCode;areaM2:number|null;year:number|null;commodity:string|null;kg:Range|null;origin:'REGISTERED'|'DEMO';basis:string;harvestPeriod?:{from:string;to:string}|null};
 export type ProductionBucket={commodity:string;year:number;origin:'REGISTERED'|'DEMO';kg:Range;cultivations:number};
 export type CoordinationContext={policy:CoordinationPolicy;contributions:ProductionContribution[];centerId:string;today:string;origin:'REGISTERED'|'DEMO'};
 export function aggregateProduction(entries:ProductionContribution[]):ProductionBucket[]{

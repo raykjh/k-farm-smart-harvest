@@ -99,7 +99,9 @@ export async function previewAnnualDispatch(plan:AnnualPlan,state:State,today=ne
  // Only occupancy intersecting a new domain matters; unrelated historical
  // inconsistencies never cause an annual plan to rewrite old records.
  const days=new Set(jobs.flatMap(j=>j.options!.flatMap(o=>o.allowed.map(s=>Math.floor(s/32)))));
- const fixed:SchedulingJob[]=state.missions.filter(m=>m.scheduledDate&&!isClosedTask(m.status)&&days.has(Math.floor(dateSlot(m.scheduledDate)/32))).map(m=>{
+ // Completion preserves the recorded resource occupancy. This also matters
+ // when a later registration is validated against a historical season.
+ const fixed:SchedulingJob[]=state.missions.filter(m=>m.scheduledDate&&m.status!=='CANCELLED'&&days.has(Math.floor(dateSlot(m.scheduledDate)/32))).map(m=>{
   const original=dateSlot(m.scheduledDate!)+(m.start%32+32)%32;
   return withLaborSupport(state,withNamedOperators(state,{...missionResourceUse(state,m),id:m.id,original,duration:m.duration,allowed:[original],locked:true,movable:false,selected:false,preferred:null,predecessor:null},m),m);
  });

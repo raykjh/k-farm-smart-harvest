@@ -6,12 +6,15 @@ import {readProductionSource,productionSourceHash,calculateProduction,lockProduc
 import {collectJointSnapshot,evaluateJointProposal,jointRuleProposal,jointSourceHash,integratedHash,type JointEvaluation} from './integrated-plan';
 import {adviseJointPlan,type JointCompletion} from './integrated-plan-adviser';
 import {dispatchPlacementKey} from './annual-dispatch';
+import {recordAcquisitionReviews} from './acquisition-review';
 
 const json=(v:unknown)=>JSON.parse(JSON.stringify(v)) as Prisma.InputJsonValue;
 export const jointKey=(audience:string,id:string)=>({where:{workspace_kind_id:{workspace:audience==='network'?'shared':recordSpace(audience),kind:'integratedPlan',id}}});
 export const readJointSources=async(tx:Prisma.TransactionClient)=>{
- const sources=[];
- for(const c of centerRegistry)sources.push(await readProductionSource(tx,c.id));
+ const sources:Awaited<ReturnType<typeof readProductionSource>>[]=[];
+ // One immutable read phase in this transaction: all centers share the same
+ // national inputs. Do not cache across transactions or approval mutations.
+ for(const c of centerRegistry)sources.push(await readProductionSource(tx,c.id,sources[0]?.coordination));
  return sources;
 };
 export type JointRequest={requestId:string;mode:'RULES'|'AI';audience:string};
@@ -35,11 +38,12 @@ export async function createJointDraft(input:JointRequest,actor:string,complete?
   const decision=input.mode==='AI'?await adviseJointPlan(snapshot,baseline,complete):null;
   const selected=decision?.selected??baseline;
   const result={input,inputHash:integratedHash(input),actor,status:'READY',fingerprint:prepared.fingerprint,createdAt:new Date().toISOString(),source:decision?'NEBIUS':'RULES',
-   selected,baseline,alternatives:decision?.alternatives??[],decision:decision?{model:decision.model,evidence:decision.evidence,modelReferences:decision.modelReferences,evidenceOrigin:decision.evidenceOrigin,usage:decision.usage,contract:decision.contract}:null,
-   fieldCount:snapshot.fields.length,remaining:snapshot.remaining,excluded:snapshot.excluded,version:snapshot.version};
+   selected,baseline,alternatives:decision?.alternatives??[],decision:decision?{model:decision.model,evidence:decision.evidence,modelReferences:decision.modelReferences,evidenceOrigin:decision.evidenceOrigin,usage:decision.usage,contract:decision.contract,...(decision.selectionAudit?{selectionAudit:decision.selectionAudit}:{})}:null,
+   fieldCount:snapshot.fields.length,remaining:snapshot.remaining,excluded:snapshot.excluded,version:snapshot.version,acquisitionReviewIds:[] as string[]};
   return await db.$transaction(async tx=>{
    const fresh=await readJointSources(tx);
    if(jointSourceHash(fresh,prepared.scope!)!==prepared.fingerprint)throw Error('계산 중 농지·자원·예약이 변경되었습니다. 초안을 적용하지 않았습니다.');
+   result.acquisitionReviewIds=await recordAcquisitionReviews(tx,selected,{draftId:input.requestId,fingerprint:prepared.fingerprint!,actor,source:decision?'NEBIUS':'RULES'});
    await tx.workRecord.update({...jointKey(input.audience,input.requestId),data:{payload:json(result),version:{increment:1},updatedAt:new Date()}});
    return result;
   },{timeout:60000,isolationLevel:'RepeatableRead'});

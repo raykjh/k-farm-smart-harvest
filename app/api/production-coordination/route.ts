@@ -18,6 +18,8 @@ export const POST=withAuth('production-coordination',async req=>{
  try{
   const b=z.object({version:z.number().int().nonnegative(),policy:coordinationPolicySchema}).strict().parse(await req.json()),global=currentPrincipal()?.role==='SUPER_ADMIN',actor=actorLabel();
   if([...b.policy.specialties,...b.policy.equipmentCostRates??[],...b.policy.operatorCostRates??[]].some(s=>!knownCenter(s.centerId)))throw Error('지역 확인 필요');
+  if((b.policy.planningLimits??[]).some(r=>r.centerIds.some(id=>!knownCenter(id))))throw Error('생산 목표 참여 지역 확인 필요');
+  if((b.policy.planningLimits??[]).some(r=>r.checkedOn>today()))throw Error('미래 검토일은 사용할 수 없습니다.');
   const costEvidence=(b.policy.economicReferences??[]).flatMap<{checkedOn:string}>(r=>r.cost.mode==='STATISTICAL_TOTAL'?[r.cost]:r.cost.components);
   if([...b.policy.yields,...b.policy.targets,...b.policy.specialties,...b.policy.marketOutlooks??[],...b.policy.nationalReferences??[],...b.policy.economicReferences??[],...b.policy.equipmentCostRates??[],...b.policy.operatorCostRates??[],...costEvidence].some(s=>s.checkedOn>today()))throw Error('미래 검토일은 사용할 수 없습니다.');
   const result=await db.$transaction(async tx=>{
@@ -27,6 +29,7 @@ export const POST=withAuth('production-coordination',async req=>{
    // Older clients know only the original policy sections. Omission preserves
    // optional evidence; an explicit [] is a reviewed deletion subject to auth.
    b.policy={...previous,...b.policy};
+   if(!global&&JSON.stringify(b.policy.planningLimits??[])!==JSON.stringify(previous.planningLimits??[]))throw Error('참여 범위 생산 목표는 총괄 담당자만 수정할 수 있습니다.');
    if(!global&&(JSON.stringify(b.policy.yields)!==JSON.stringify(previous.yields)||JSON.stringify(b.policy.targets)!==JSON.stringify(previous.targets)||JSON.stringify(b.policy.marketOutlooks??[])!==JSON.stringify(previous.marketOutlooks??[])||JSON.stringify(b.policy.nationalReferences??[])!==JSON.stringify(previous.nationalReferences??[])||JSON.stringify(b.policy.economicReferences??[])!==JSON.stringify(previous.economicReferences??[])||JSON.stringify(b.policy.equipmentCostRates??[])!==JSON.stringify(previous.equipmentCostRates??[])||JSON.stringify(b.policy.operatorCostRates??[])!==JSON.stringify(previous.operatorCostRates??[])||JSON.stringify(b.policy.specialties.filter(s=>s.centerId!==centerId()))!==JSON.stringify(previous.specialties.filter(s=>s.centerId!==centerId()))))throw Error('전국·경제·비용 기준은 총괄, 지역 특화 기준은 소속 센터만 수정할 수 있습니다.');
    const payload=JSON.parse(JSON.stringify(b.policy)),version=b.version+1;
    await tx.workRecord.upsert({where:{workspace_kind_id:coordinationPolicyKey},create:{...coordinationPolicyKey,payload,version},update:{payload,version}});

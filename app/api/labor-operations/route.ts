@@ -10,7 +10,9 @@ import {emptyLaborOps,workerSchema,availableFor,notice,allocateJob,respond,overr
 import {currentLaborDemands} from '@/lib/labor-demands';
 import type {Prisma} from '@prisma/client';
 import {laborSharingLock,externalLaborBusy,reconcileLaborShares,sharedLaborRows,type LaborShare} from '@/lib/labor-sharing';
-import {assertCapacityRoster} from '@/lib/labor-capacity-store';
+import {assertCapacityRoster,assertLaborCapacitySchedule,readLaborCapacity} from '@/lib/labor-capacity-store';
+import {permanentWorkforceSchema,applyPermanentWorkforce} from '@/lib/permanent-workforce';
+import type {State} from '@/lib/types';
 import {absenceInput,recordLaborRecovery,refreshLaborRecoveries} from '@/lib/labor-recovery-store';
 import {recordWorkException} from '@/lib/labor-operations';
 import {laborPoliciesForDates} from '@/lib/labor-policy-store';
@@ -26,6 +28,7 @@ const hash=(v:unknown)=>createHash('sha256').update(JSON.stringify(v)).digest('h
 const demands=(tx:Prisma.TransactionClient)=>currentLaborDemands(tx,activeCenterId());
 const ids=z.array(z.string().uuid()).max(100);
 const action=z.discriminatedUnion('action',[
+ z.object({action:z.literal('permanentWorkforce'),workforce:permanentWorkforceSchema}),
  z.object({action:z.literal('saveWorker'),id:z.string().uuid(),profile:z.object({name:z.string().trim().min(1).max(60),birth:accountBirthSchema,phone:accountPhoneSchema,address:z.string().trim().min(1).max(200)}).strict()}),
  z.object({action:z.literal('employees'),input:employeeInput}),
  z.object({action:z.literal('saveAttendance'),jobIds:z.array(z.string().min(1).max(300)).min(1).max(1000),changes:z.array(attendanceChange).max(2000)}),
@@ -117,6 +120,13 @@ async function handlePOST(req:NextRequest){
   if(a.action==='penalty')addPenalty(s,a.jobId,a.workerId,a.points,a.reason,operator,now);
   if(a.action==='reviewAttendance'){const j=s.jobs.find(j=>j.id===a.jobId);if(!j)throw Error('작업 확인 필요');reviewAttendance(j,operator,now);}
   delete s.externalBusy;for(const j of s.jobs)delete j.borrowedNames;
+  if(a.action==='permanentWorkforce')s.permanentWorkforce=a.workforce;
+  if(s.permanentWorkforce){
+   const center=await tx.center.findUniqueOrThrow({where:{id:activeCenterId()}});
+   const current={...center.state as unknown as State,laborCapacity:await readLaborCapacity(tx,activeCenterId())};
+   const checked=applyPermanentWorkforce(current,s.permanentWorkforce,s,new Date(Date.parse(now)+9*3600000).toISOString().slice(0,10));
+   await assertLaborCapacitySchedule(tx,activeCenterId(),checked);
+  }
   await assertCapacityRoster(tx,activeCenterId(),s);
   await tx.workRecord.upsert({where:key(),create:{workspace:recordSpace(),kind:'laborOperations',id:'current',version:1,payload:json(s)},update:{version:version+1,payload:json(s)}});
   await reconcileLaborShares(tx);

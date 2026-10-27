@@ -11,9 +11,11 @@ import {isLegacyCrop,cropCodes,type SupportedCropCode} from './crop-registry';
 import {catalogOperationTasks} from './catalog-operating-plan';
 import {workloadCrop} from './crop-workload-catalog';
 import {candidateContribution,coordinateCandidate,type CoordinationContext,type CandidateCoordination} from './production-coordination';
-import {harvestYears,harvestPeriod} from './production-coordination-store';
+import {reviewPlanContribution} from './production-coordination-store';
 import {adviseOperatingCrop,type OperatingCropFacts,type OperatingCropDecision} from './operating-crop-adviser';
 import {isRecordedOptionalCancellation} from './task-lifecycle';
+import {candidateLimitCheck} from './production-limits';
+import {calibrateWorkload,type WorkloadObservation} from './workload-history';
 export type CropSelector=(pnu:string,candidates:OperatingCropFacts[])=>Promise<OperatingCropDecision>;
 
 export const productionDay=z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(d=>Number.isFinite(Date.parse(d))&&new Date(d).toISOString().slice(0,10)===d);
@@ -73,7 +75,7 @@ export function cropPeriod(crop:SupportedCropCode,context:z.infer<typeof plannin
  return {start,end,context:clipped};
 }
 
-export async function planContinuousProduction(input:{fields:FieldEntry[];participations:Participation[];cycles:Cultivation[];state:State;criteria:ProductionCriteria;version:number;today:string;names:Record<string,string>;consentedPnus:string[];coordination?:CoordinationContext},selectCrop?:CropSelector,options:ProductionRunOptions={}){
+export async function planContinuousProduction(input:{fields:FieldEntry[];participations:Participation[];cycles:Cultivation[];state:State;criteria:ProductionCriteria;version:number;today:string;names:Record<string,string>;consentedPnus:string[];workloadObservations?:WorkloadObservation[];coordination?:CoordinationContext},selectCrop?:CropSelector,options:ProductionRunOptions={}){
  if(options.choices&&new Set(options.choices.map(c=>c.pnu)).size!==options.choices.length)throw Error('농지별 작물 선택 중복');
  const {fields,cycles,criteria,today,names}=input;
  let reserved=structuredClone(input.state);
@@ -105,15 +107,22 @@ export async function planContinuousProduction(input:{fields:FieldEntry[];partic
   const suitability=recommendConditions(f.conditions).filter(c=>c.score!==null&&!c.missing.length&&!c.blocked.length);
   if(!suitability.length){item.reason='농지·기후 적합성 및 현장 확인값을 보완하세요.';continue}
   for(const profile of criteria.profiles.filter(x=>x.context.region===f.conditions?.region))for(const c of suitability){
+   if(profile.context.variety&&profile.context.variety.crop!==c.crop)continue;
    if(choice&&(choice.crop!==c.crop||choice.profileId!==profile.id))continue;
    try{
-    const period=cropPeriod(c.crop,profile.context,earliest,p.term.until);
+    const calibrated=calibrateWorkload(profile.context,f,c.crop,today,input.workloadObservations??[],profile.dataOrigin==='DEMO'||profile.context.catalog?'DEMO_SIMULATION':'ACTUAL');
+    const period=cropPeriod(c.crop,calibrated.context,earliest,p.term.until);
     const result=(await delegatedProposal([f],input.version,reserved,cycles,period,()=>idFor(f.pnu,last?.id),today,names,{crops:[c.crop],preserveOrder:true,includeUnassigned:!!options.collect}));
-    const proposal=result.plans[0],ready=!!proposal&&!result.approvalBlocked;
-    const adjustment=proposal&&coordination?coordinateCandidate(candidateContribution({id:coordination.centerId+':proposal:'+proposal.cultivation.id,centerId:coordination.centerId,crop:c.crop,areaM2:f.area,harvestYears:harvestYears(proposal.plan),harvestPeriod:harvestPeriod(proposal.plan),origin:profile.dataOrigin==='DEMO'||profile.context.catalog?'DEMO':coordination.origin},coordination.policy,today),c.score!,coordination):undefined;
-    item.comparisons.push({crop:c.crop,score:adjustment?.score??c.score,status:ready?'FEASIBLE':'BLOCKED',reason:result.pending.map(p=>p.reason).concat(proposal?.dispatch.feasibility.flatMap(f=>f.missing.map(m=>m.reason))??[]).join(' / '),...(adjustment?{coordination:adjustment}:{})});
+    const proposal=result.plans[0];
+    if(proposal&&calibrated.evidence.length)Object.assign(proposal.plan,{workloadCalibration:calibrated.evidence});
+    const reviewed=proposal&&coordination?reviewPlanContribution(proposal.plan,{id:coordination.centerId+':proposal:'+proposal.cultivation.id,centerId:coordination.centerId,crop:c.crop,origin:profile.dataOrigin==='DEMO'||profile.context.catalog?'DEMO':coordination.origin},coordination.policy,today,coordination.contributions):null;
+    const adjustment=reviewed&&coordination?coordinateCandidate(reviewed.contribution,c.score!,coordination):undefined;
+    const limits=adjustment&&coordination?candidateLimitCheck(adjustment.production,coordination.contributions,coordination.policy.planningLimits??[],today):null;
+    const ready=!!proposal&&!result.approvalBlocked&&!limits?.blocked&&(!reviewed?.variety||reviewed.variety.eligible);
+    item.comparisons.push({crop:c.crop,score:adjustment?.score??c.score,status:ready?'FEASIBLE':'BLOCKED',reason:result.pending.map(p=>p.reason).concat(proposal?.dispatch.feasibility.flatMap(f=>f.missing.map(m=>m.reason))??[],limits?.blocked?['참여 범위 생산 목표 초과 또는 근거 확인 필요']:[]).join(' / '),...(adjustment?{coordination:adjustment}:{})});
     if(proposal)options.collect?.({pnu:f.pnu,crop:c.crop,profileId:profile.id,plan:proposal,ready,score:adjustment?.score??c.score!,coordination:adjustment});
-    if(ready)candidates.push({plan:{...proposal,score:adjustment?.score??proposal.score},name:profile.name,profileId:profile.id,coordination:adjustment});
+    if(reviewed?.variety&&!reviewed.variety.eligible)item.comparisons.at(-1)!.reason+=' / 품종·보급 면적·과수 수령·수분 조건 확인 필요';
+    if(ready)candidates.push({plan:{...proposal,score:adjustment?.score??proposal.score},name:profile.name+(profile.context.variety?' · '+profile.context.variety.name:''),profileId:profile.id,coordination:adjustment});
    }catch(e){item.comparisons.push({crop:c.crop,score:c.score,status:'BLOCKED',reason:e instanceof Error?e.message:'작기 기준 확인 필요'})}
   }
   candidates.sort((a,b)=>b.plan.score-a.plan.score||a.plan.cultivation.start.localeCompare(b.plan.cultivation.start)||a.name.localeCompare(b.name)||cropCodes.indexOf(a.plan.cultivation.crop)-cropCodes.indexOf(b.plan.cultivation.crop)||a.profileId.localeCompare(b.profileId));

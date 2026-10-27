@@ -1,4 +1,5 @@
 import type {Prisma} from '@prisma/client';
+import {withNamedOperators} from './named-operators';
 import type {Mission,State} from './types';
 import {recordSpace} from './workspace';
 import {geographicNeighbors} from './center-adjacency';
@@ -40,12 +41,12 @@ export async function assertCapacityRoster(tx:Prisma.TransactionClient,id:string
 }
 export async function assertLaborCapacitySchedule(tx:Prisma.TransactionClient,id:string,state:State){
  const view=await readLaborCapacity(tx,id),s={...state,laborCapacity:view};
- if(!view.incoming.length&&!view.outgoing.length&&!view.absences?.length&&!s.missions.some(m=>m.laborSupportIds?.length&&!isClosedTask(m.status)))return;
+ if(!s.permanentWorkforce&&!view.incoming.length&&!view.outgoing.length&&!view.absences?.length&&!s.missions.some(m=>m.laborSupportIds?.length&&!isClosedTask(m.status)))return;
  const tasks:SchedulingJob[]=s.missions.filter(m=>!isClosedTask(m.status)&&m.scheduledDate&&m.scheduledDate>=capacityToday()).map(m=>{
   const original=dateSlot(m.scheduledDate!)+(m.start%32+32)%32;
-  return withLaborSupport(s,{...missionResourceUse(s,m),id:m.id,original,duration:m.duration,allowed:[original],locked:true,selected:false,preferred:null,predecessor:null},m);
+  return withNamedOperators(s,withLaborSupport(s,{...missionResourceUse(s,m),id:m.id,original,duration:m.duration,allowed:[original],locked:true,selected:false,preferred:null,predecessor:null},m),m);
  });
- verifySchedule({tasks,purpose:'INITIAL',freezeBefore:0,daily:false,staffCapacity:s.staffCount,transportCapacity:s.transportCount,capacityLimits:crewCapacityLimits(s),capacityBlocks:laborCapacityBlocks(s)},tasks.map(t=>({id:t.id,start:t.original,laborSupportIds:t.laborSupportIds??[]})),'INITIAL_DISPATCH');
+ verifySchedule({tasks,purpose:'INITIAL',freezeBefore:0,daily:false,staffCapacity:s.staffCount,transportCapacity:s.transportCount,capacityLimits:crewCapacityLimits(s),capacityBlocks:laborCapacityBlocks(s)},tasks.map(t=>({id:t.id,start:t.original,laborSupportIds:t.laborSupportIds??[],...(t.operatorIds?{operatorIds:t.operatorIds}:{})})),'INITIAL_DISPATCH');
 }
 export async function notifyCapacity(tx:Prisma.TransactionClient,w:LaborCapacityWindow,event:string,detail:unknown){
  for(const center of [w.ownerCenterId,w.borrowerCenterId])await tx.workRecord.create({data:{workspace:recordSpace(center),kind:'laborCapacityNotice',id:crypto.randomUUID(),payload:JSON.parse(JSON.stringify({windowId:w.id,workerName:w.workerName,date:w.date,event,detail,at:new Date().toISOString(),delivery:'INTERNAL_RECORD_ONLY'}))}});

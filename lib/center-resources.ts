@@ -14,6 +14,8 @@ import {loanDependencies} from './loan-dependencies';
 import {operatingCrewDemands} from './operating-capacity';
 import {taskCrewStaff} from './planned-labor-demand';
 import {readLaborCapacity} from './labor-capacity-store';
+import {applyPermanentWorkforce,workforceAvailable} from './permanent-workforce';
+import type {LaborOps} from './labor-operations';
 const key=(id:string)=>({workspace:'shared',kind:'equipmentLoan',id});
 const json=(v:unknown)=>JSON.parse(JSON.stringify(v));
 export const loanInput=z.object({id:z.string().uuid(),version:z.number().int().nonnegative(),machineId:z.string().min(1),ownerCenterId:z.string().refine(knownCenter),borrowerCenterId:z.string().refine(knownCenter),usableFrom:z.string(),usableUntil:z.string(),status:z.enum(['REQUESTED','CONFIRMED','CANCELLED']),transportConfirmed:z.boolean(),operatorConfirmed:z.boolean()}).strict();
@@ -44,8 +46,15 @@ export async function resourceView(tx:Prisma.TransactionClient,state:State,id:st
   }
  }
  const lendingDays=new Map<string,{ownerCenterId:string;date:string;capacity:number}>();
+ const ownerViews=new Map<string,State>();
  for(const o of offers.filter(o=>o.ownerCenterId!==id)){
-  const owner=centers.find(c=>c.id===o.ownerCenterId)?.state as unknown as State|undefined;if(!owner)continue;
+  let owner=ownerViews.get(o.ownerCenterId)??centers.find(c=>c.id===o.ownerCenterId)?.state as unknown as State|undefined;if(!owner)continue;
+  if(!ownerViews.has(o.ownerCenterId)){
+   const roster=(await tx.workRecord.findUnique({where:{workspace_kind_id:{workspace:recordSpace(o.ownerCenterId),kind:'laborOperations',id:'current'}}}))?.payload as unknown as LaborOps|undefined;
+   if(roster?.permanentWorkforce)owner=applyPermanentWorkforce({...owner,laborCapacity:await readLaborCapacity(tx,o.ownerCenterId)},roster.permanentWorkforce,roster,new Date(Date.now()+9*3600000).toISOString().slice(0,10));
+   else if(owner.permanentWorkforce)throw Error('장비 소유 센터의 상시 근무 원본 확인 필요');
+   ownerViews.set(o.ownerCenterId,owner);
+  }
   const last=Math.min(Date.parse(o.to),Date.parse(o.from)+366*86400000);
   for(let at=Date.parse(o.from);at<=last;at+=86400000){const date=new Date(at).toISOString().slice(0,10),key=o.ownerCenterId+':'+date;if(lendingDays.has(key))continue;
    const crew=Array(32).fill(0),vehicles=Array(32).fill(0),operators=Array(32).fill(0);
@@ -55,12 +64,18 @@ export async function resourceView(tx:Prisma.TransactionClient,state:State,id:st
     const demand=operatingCrewDemands(owner,m)?.[`${owner.centerSharing?.centerId??'demo'}:operators`]??0;
     for(let t=(m.start%32+32)%32;t<Math.min(32,(m.start%32+32)%32+m.duration);t++)operators[t]+=demand;
    }
-   const capacity=Math.max(0,Math.min(owner.staffCount-Math.max(...crew),owner.transportCount-Math.max(...vehicles),owner.crewCapacity?owner.crewCapacity.operators-Math.max(...operators):Infinity)-committed);
+   const availability=(role?:'OPERATOR')=>Array.from({length:32},(_,i)=>owner!.permanentWorkforce!.workers.filter(w=>(!role||w.role===role)&&workforceAvailable(w,date,480+i*15)&&![...(owner!.laborCapacity?.outgoing??[]).filter(w=>w.status==='CONFIRMED'),...(owner!.laborCapacity?.absences??[])].some(a=>a.workerId===w.workerId&&a.date===date&&a.startMinute<495+i*15&&480+i*15<a.endMinute)).length);
+   const staffFree=owner.permanentWorkforce?Math.min(...availability().map((n,i)=>n-crew[i])):owner.staffCount-Math.max(...crew);
+   const operatorFree=owner.permanentWorkforce?Math.min(...availability('OPERATOR').map((n,i)=>n-operators[i])):owner.crewCapacity?owner.crewCapacity.operators-Math.max(...operators):Infinity;
+   const capacity=Math.max(0,Math.min(staffFree,owner.transportCount-Math.max(...vehicles),operatorFree)-committed);
    lendingDays.set(key,{ownerCenterId:o.ownerCenterId,date,capacity});
   }
  }
  next.centerSharing={centerId:id,neighborCenterIds:neighbors,loans,offers,blocks:blocks.sort((a,b)=>a.machineId.localeCompare(b.machineId)||a.date.localeCompare(b.date)),lendingDays:[...lendingDays.values()].sort((a,b)=>a.ownerCenterId.localeCompare(b.ownerCenterId)||a.date.localeCompare(b.date))};
  next.laborCapacity=await readLaborCapacity(tx,id);
+ const workforceOps=(await tx.workRecord.findUnique({where:{workspace_kind_id:{workspace:recordSpace(id),kind:'laborOperations',id:'current'}}}))?.payload as unknown as LaborOps|undefined;
+ if(workforceOps?.permanentWorkforce)return applyPermanentWorkforce(next,workforceOps.permanentWorkforce,workforceOps,new Date(Date.now()+9*3600000).toISOString().slice(0,10));
+ if(next.permanentWorkforce)throw Error('확인된 상시 근무 원본이 없습니다. 이전 가용 인원을 재사용하지 않았습니다.');
  return next;
 }
 /** Final authority check uses the live owner ledger, not a borrowed cached copy. */

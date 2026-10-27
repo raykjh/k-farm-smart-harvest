@@ -1,8 +1,10 @@
 import {z} from 'zod';
 import {cropCodes,legacyCropCodes,isOrchardCrop,type SupportedCropCode} from './crop-registry';
+import {orchardIdentitySchema} from './crop-variety';
 const known=z.enum(['unknown','yes','no']);
 const suitability=z.enum(['unknown','suitable','marginal','unsuitable']);
 export const fieldConditions=z.object({
+ orchard:orchardIdentitySchema.optional(),
  landUse:z.enum(['unknown','paddy','upland','orchard']),water:known,drainage:z.enum(['unknown','good','poor']),
  // Optional for historical records: never silently reinterpret them as open-field.
  cadastralUse:z.enum(['unknown','paddy','upland','orchard','other']).optional(),

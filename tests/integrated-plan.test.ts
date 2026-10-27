@@ -15,7 +15,9 @@ it('compares the crop mix with actual common dispatch and leaves all source data
  const baseline=await evaluateJointProposal(snapshot,jointRuleProposal(snapshot)),completion=vi.fn(fakeJointCompletion);
  const ai=await adviseJointPlan(snapshot,baseline,completion);
  expect(completion).toHaveBeenCalledTimes(2);expect(ai.selected.status).toBe('REVIEW_READY');expect(ai.selected.metrics.readyFields).toBe(2);
- expect(JSON.stringify(completion.mock.calls[0])).toContain('EVERY evaluated ID as a required key');
+ const selectTool=(completion.mock.calls[1][0].tools as any[]).find(t=>t.function.name==='select_plan');
+ expect(selectTool.function.parameters.properties.assessments.required).toEqual(['E0','E1']);
+ expect(selectTool.function.parameters.properties.assessments.properties.E1.enum).toContain('horizonReadyAreaM2');
  expect(ai.contract).toBe('joint-crop-resources-v6');
  expect(ai.evidenceOrigin).toBe('SERVER_METRIC_REFERENCES_V1');expect(ai.modelReferences.evidence).toEqual(['missingTasks']);
  expect(ai.selected.mix).toHaveLength(2);expect(ai.selected.metrics.largestCropShare).toBe(.5);expect(baseline.metrics.largestCropShare).toBe(1);
@@ -214,7 +216,7 @@ it('supports three calculator revisions within the unchanged 16KB per-call budge
  const complete=vi.fn(async(body:Record<string,unknown>)=>{
   validateRequest(body,'planning');sizes.push(Buffer.byteLength(JSON.stringify(body)));calls++;
   const last=(body.messages as any[]).at(-1),result=last.role==='tool'?JSON.parse(last.content):null;
-  const final=calls===4,args=final?{evaluationId:'E0',assessments:Object.fromEntries([['E0','missingTasks'],...result.comparisonRows.E0.map((r:any)=>[r.evaluationId,r.metric])])}:{...base.proposal,choices:Object.fromEntries(base.proposal.choices.map((c,i)=>[c.field,i<calls?snap.fields.find(f=>f.id===c.field)!.options.find(o=>o.crop==='pepper')!.id:c.option]))};
+  const final=calls===4,args=final?{evaluationId:'E0',assessments:Object.fromEntries(result.evaluatedIds.map((id:string)=>[id,id==='E0'?'missingTasks':'personHours']))}:{...base.proposal,choices:Object.fromEntries(base.proposal.choices.map((c,i)=>[c.field,i<calls?snap.fields.find(f=>f.id===c.field)!.options.find(o=>o.crop==='pepper')!.id:c.option]))};
   return {choices:[{finish_reason:'tool_calls',message:{tool_calls:[{id:'step-'+calls,function:{name:final?'select_plan':'evaluate_plan',arguments:JSON.stringify(args)}}]}}]};
  });
  const result=await adviseJointPlan(snap,base,complete);

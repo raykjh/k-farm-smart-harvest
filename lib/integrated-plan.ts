@@ -10,8 +10,11 @@ import {jointFieldContext,jointDecisionContext} from './integrated-plan-context'
 import {optionEconomics,economicModelFacts,type OptionEconomics} from './integrated-plan-economics';
 import {selectNationalReferences} from './production-evidence';
 import {cropCodes} from './crop-registry';
+import {regionalPortfolio} from './regional-portfolio';
+import {candidateLimitCheck} from './production-limits';
+import {reviewPlanContribution} from './production-coordination-store';
 
-export const INTEGRATED_PLAN_VERSION='crop-resource-plan-v4';
+export const INTEGRATED_PLAN_VERSION='crop-resource-plan-v7';
 export const integratedHash=(value:unknown)=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
 export const staffingStrategies=['CORE_AND_PEAK','PEAK_ONLY'] as const;
 // Design assumptions, not observations, prices, employment agreements or capacity.
@@ -21,7 +24,7 @@ export const jointProposalSchema=z.object({choices:z.array(choiceSchema).min(1).
 export type JointProposal=z.infer<typeof jointProposalSchema>;
 export type JointOption=ProductionCandidate&{id:string};
 export type JointField={id:string;centerId:string;pnu:string;options:JointOption[]};
-export type JointSnapshot={version:typeof INTEGRATED_PLAN_VERSION;fingerprint:string;sources:ProductionSource[];scope:string[];fields:JointField[];excluded:{centerId:string;count:number}[];remaining:number};
+export type JointSnapshot={version:typeof INTEGRATED_PLAN_VERSION;fingerprint:string;sources:ProductionSource[];scope:string[];fields:JointField[];allFields?:JointField[];excluded:{centerId:string;count:number}[];remaining:number};
 
 export async function collectJointSnapshot(sources:ProductionSource[],scope:string[]):Promise<JointSnapshot>{
  const fields:JointField[]=[],excluded:JointSnapshot['excluded']=[];let optionIndex=0;
@@ -43,7 +46,7 @@ export async function collectJointSnapshot(sources:ProductionSource[],scope:stri
  // Bound the paid context by whole fields; never prune a field's crop options
  // merely to force the model into a favored crop. Remaining fields stay visible.
  while(selected.length>1&&Buffer.byteLength(JSON.stringify(selected.map(f=>modelField(f,{fields:selected,sources}))),'utf8')>4200)selected.pop();
- return {version:INTEGRATED_PLAN_VERSION,fingerprint:jointSourceHash(sources,scope),sources,scope,fields:selected,excluded,remaining:fields.length-selected.length};
+ return {version:INTEGRATED_PLAN_VERSION,fingerprint:jointSourceHash(sources,scope),sources,scope,fields:selected,allFields:fields,excluded,remaining:fields.length-selected.length};
 }
 export const jointSourceHash=(sources:ProductionSource[],scope:string[])=>integratedHash({version:INTEGRATED_PLAN_VERSION,assumptions:acquisitionAssumptions,scope:[...scope].sort(),sources:[...sources].sort((a,b)=>a.scopeId.localeCompare(b.scopeId)).map(s=>[s.scopeId,productionSourceHash(s)])});
 export function validateJointProposal(snapshot:JointSnapshot,raw:unknown){
@@ -74,18 +77,19 @@ export function staffingPlan(rows:WorkDemand[],centerId:string,from:string,to:st
  return {centerId,strategy,contractWorkers,dailyPersonShifts,reserveWorkers,peakWeeklyHours,weeks,
   status:'ACQUISITION_SCENARIO' as const,assumptions:acquisitionAssumptions};
 }
-export type ResourceRequest={centerId:string;resource:string;from:string;to:string;tasks:number;quantity:number|null;status:'REVIEW_REQUIRED';route:'ADJACENT_THEN_ACQUIRE'|'STAFFING_REVIEW'|'CRITERIA_REVIEW'};
+export type ResourceRequest={centerId:string;resource:string;from:string;to:string;tasks:number;quantity:number|null;status:'REVIEW_REQUIRED';route:'ADJACENT_THEN_ACQUIRE'|'STAFFING_REVIEW'|'CRITERIA_REVIEW'|'PRODUCTION_REVIEW'};
 export function assertCrossCenterPeople(rows:{centerId:string;date:string;startMinute:number;durationMinutes:number;operatorIds?:string[];laborSupportIds?:string[]}[],sources:ProductionSource[]=[]){
  // Support IDs identify availability windows, not people. Resolve to the same
  // employee across two different offers and include the registered travel time.
- const people=new Map<string,{id:string;travel:number}>();
+ const people=new Map<string,{id:string;travel:number}>(),operators=new Map<string,string>();
  for(const source of sources){
+  for(const w of source.state?.permanentWorkforce?.workers??[])if(w.operatorId){const identity=`worker:${source.scopeId}:${w.workerId}`,old=operators.get(w.operatorId);if(old&&old!==identity)throw Error('센터 간 운영자 식별자 중복');operators.set(w.operatorId,identity);}
   for(const w of [...source.state?.laborCapacity?.incoming??[],...source.state?.laborCapacity?.outgoing??[]])people.set(w.id,{id:`worker:${w.ownerCenterId}:${w.workerId}`,travel:w.travelMinutes});
   for(const r of source.state?.laborCapacity?.reserves??[])people.set(r.id,{id:`worker:${source.scopeId}:${r.workerId}`,travel:0});
  }
  const occupied=new Map<string,{centerId:string;start:number;end:number}[]>();
  for(const r of rows){
-  const assigned=[...(r.operatorIds??[]).map(id=>({id:`operator:${id}`,travel:0})),...(r.laborSupportIds??[]).map(id=>people.get(id)??{id:`support-window:${id}`,travel:0})];
+  const assigned=[...(r.operatorIds??[]).map(id=>({id:operators.get(id)??`operator:${id}`,travel:0})),...(r.laborSupportIds??[]).map(id=>people.get(id)??{id:`support-window:${id}`,travel:0})];
   for(const person of assigned){
    const key=JSON.stringify([person.id,r.date]),previous=occupied.get(key)??[],start=r.startMinute-person.travel,end=r.startMinute+r.durationMinutes+person.travel;
    if(previous.some(p=>p.centerId!==r.centerId&&p.start<end&&start<p.end))throw Error('센터 간 운영자·지원 인력 중복 배정입니다. 자원 배정을 확인하세요.');
@@ -93,7 +97,7 @@ export function assertCrossCenterPeople(rows:{centerId:string;date:string;startM
   }
  }
 }
-export async function evaluateJointProposal(snapshot:JointSnapshot,raw:unknown){
+async function evaluateJointCore(snapshot:JointSnapshot,raw:unknown){
  const proposal=validateJointProposal(snapshot,raw);
  const sources=structuredClone(snapshot.sources).sort((a,b)=>a.scopeId.localeCompare(b.scopeId)),views:{centerId:string;view:Awaited<ReturnType<typeof calculateProduction>>;choices:ProductionChoice[]}[]=[],requests:ResourceRequest[]=[],demands:WorkDemand[]=[];
  // Each center reads the same network totals. Union by cultivation identity,
@@ -121,11 +125,15 @@ export async function evaluateJointProposal(snapshot:JointSnapshot,raw:unknown){
    // Suitability is the field assessment before sequential supply adjustments.
    // Whole-batch risk is evaluated independently below.
    requiredTasks+=required.length;score+=candidate.coordination?.baseScore??candidate.score;
+   const productionBlocked=candidate.coordination&&candidateLimitCheck(candidate.coordination.production,production,source.coordination.policy.planningLimits??[],source.today).blocked;
+   const varietyBlocked=candidate.coordination&&candidate.plan.plan.context.variety&&!reviewPlanContribution(candidate.plan.plan,{id:candidate.coordination.production.id,centerId:source.scopeId,crop:candidate.crop,origin:candidate.coordination.production.origin},source.coordination.policy,source.today,production).variety?.eligible;
+   if(productionBlocked)requests.push({centerId:source.scopeId,resource:'PRODUCTION_TARGET',from:p.cultivation.start,to:p.cultivation.end,tasks:required.length,quantity:null,status:'REVIEW_REQUIRED',route:'PRODUCTION_REVIEW'});
+   if(varietyBlocked)requests.push({centerId:source.scopeId,resource:'VARIETY_CRITERIA',from:p.cultivation.start,to:p.cultivation.end,tasks:required.length,quantity:null,status:'REVIEW_REQUIRED',route:'CRITERIA_REVIEW'});
    if(candidate.coordination)production.push(candidate.coordination.production);
    const assignments=item?.status==='REVIEW'?item.proposal!.dispatch.assignments:[];
    placements.push(dispatchPlacementKey(assignments));
    missingTasks+=required.filter(t=>!assignments.some(a=>a.taskId===t.id)).length;
-   for(const task of required.filter(t=>!assignments.some(a=>a.taskId===t.id))){
+   for(const task of required.filter(t=>!productionBlocked&&!varietyBlocked&&!assignments.some(a=>a.taskId===t.id))){
     const req=task.requirements;
     requests.push({centerId:source.scopeId,resource:req.machineCode??'LABOR',from:task.window?.from??p.cultivation.start,to:task.window?.to??p.cultivation.end,tasks:1,quantity:null,status:'REVIEW_REQUIRED',route:!task.window||!req.machineCode&&req.laborMinutesPer1000m2===null?'CRITERIA_REVIEW':req.machineCode?'ADJACENT_THEN_ACQUIRE':'STAFFING_REVIEW'});
    }
@@ -161,28 +169,47 @@ export async function evaluateJointProposal(snapshot:JointSnapshot,raw:unknown){
  for(const s of selected)cropAreas.set(s.option.crop,(cropAreas.get(s.option.crop)??0)+s.option.plan.plan.plots.reduce((n,p)=>n+p.area,0));
  const area=[...cropAreas.values()].reduce((a,b)=>a+b,0),mix=[...cropAreas].map(([crop,areaM2])=>({crop,areaM2,share:area?areaM2/area:0}));
  const decisionContext=jointDecisionContext(snapshot,selected,production);
+ const regional=regionalPortfolio(snapshot,proposal);
  const comparable=economics.every(e=>e.assessment.comparable),assessed=economics.filter(e=>e.assessment.comparable).length;
  const economicMetrics={assessedEconomicsFields:assessed,unassessedEconomicsFields:economics.length-assessed,unfavorableBalanceWon:comparable?economics.reduce((n,e)=>n+e.assessment.metrics.unfavorableBalanceWon!,0):null,baseBalanceWon:comparable?economics.reduce((n,e)=>n+e.assessment.metrics.baseBalanceWon!,0):null};
- const metrics={fields:selected.length,readyFields:views.reduce((n,v)=>n+v.view.items.filter(i=>i.status==='REVIEW').length,0),requiredTasks,missingTasks,borrowedTasks,personHours:Math.round(personHours*100)/100,meanSuitability:Math.round(score/selected.length*100)/100,largestCropShare:Math.max(0,...mix.map(m=>m.share)),contractWorkers:staffing.reduce((n,s)=>n+s.contractWorkers,0),dailyPersonShifts:staffing.reduce((n,s)=>n+s.dailyPersonShifts,0),reserveWorkers:staffing.reduce((n,s)=>n+s.reserveWorkers,0),...decisionContext.metrics,...economicMetrics};
- return {id:integratedHash({source:snapshot.fingerprint,proposal,placements,metrics,economics}),proposal,metrics,decisionContext,views,mix,totals,staffing,equipment,demands,requests,economics,
-  status:missingTasks?'RESOURCE_REQUIRED' as const:'REVIEW_READY' as const,reserved:false as const,approvalRequired:true as const,
+ const metrics={fields:selected.length,readyFields:views.reduce((n,v)=>n+v.view.items.filter(i=>i.status==='REVIEW').length,0),requiredTasks,missingTasks,borrowedTasks,personHours:Math.round(personHours*100)/100,meanSuitability:Math.round(score/selected.length*100)/100,largestCropShare:Math.max(0,...mix.map(m=>m.share)),contractWorkers:staffing.reduce((n,s)=>n+s.contractWorkers,0),dailyPersonShifts:staffing.reduce((n,s)=>n+s.dailyPersonShifts,0),reserveWorkers:staffing.reduce((n,s)=>n+s.reserveWorkers,0),hardLimitViolations:regional.hardLimitViolations,remainingCandidateAreaM2:regional.remainingCandidateAreaM2,remainingDeferredAreaM2:regional.remainingDeferredAreaM2,...decisionContext.metrics,...economicMetrics};
+ return {id:integratedHash({source:snapshot.fingerprint,proposal,placements,metrics,economics}),proposal,metrics,decisionContext,regional,views,mix,totals,staffing,equipment,demands,requests,economics,
+  status:missingTasks||regional.hardLimitViolations?'RESOURCE_REQUIRED' as const:'REVIEW_READY' as const,reserved:false as const,approvalRequired:true as const,
   coverage:'PARTICIPATING_CULTIVATIONS_ONLY' as const,priceForecast:null,costEstimate:{basis:'REFERENCE_SCENARIOS_NOT_NET_PROFIT' as const,complete:comparable,assessedFields:assessed},
   unknowns:['PRICE_MODEL_NOT_CALIBRATED','ACQUISITION_COSTS_NOT_ENTERED',...(assessed<economics.length?['ECONOMIC_REFERENCE_OR_COSTS_INCOMPLETE']:[]),...(requests.length?['UNSCHEDULED_DEMAND_EXCLUDED_FROM_STAFFING_TOTAL']:[])],
   inputFingerprint:snapshot.fingerprint,assumptions:acquisitionAssumptions};
+}
+/** Read-only rollout over the same bounded set of already registered fields.
+ * This uses the common scheduler, including the current choices and existing
+ * reservations. It cannot reserve or approve later fields. Omitted fields are
+ * explicit; an envelope alone is never labelled a schedulable area. */
+export async function evaluateJointProposal(snapshot:JointSnapshot,raw:unknown){
+ const current=await evaluateJointCore(snapshot,raw),own=new Set(snapshot.fields.map(f=>f.id));
+ const all=snapshot.allFields??snapshot.fields;
+ const window=[...snapshot.fields,...all.filter(f=>!own.has(f.id))].slice(0,12);
+ const expanded={...snapshot,fields:window,remaining:Math.max(0,all.length-window.length)};
+ const rollout=window.length>snapshot.fields.length
+  ?await evaluateJointCore(expanded,{staffing:current.proposal.staffing,choices:regionalPortfolio(expanded,current.proposal).selectedChoices})
+  :current;
+ const evaluated=new Set(window.map(f=>`${f.centerId}:${f.pnu}`));
+ const readyAreaM2=rollout.views.reduce((n,v)=>n+v.view.items.filter(i=>evaluated.has(`${v.centerId}:${i.pnu}`)&&i.status==='REVIEW').reduce((s,i)=>s+(i.proposal?.plan.plots.reduce((a,p)=>a+p.area,0)??0),0),0);
+ const horizon={method:'BOUNDED_COMMON_SCHEDULER_V1' as const,evaluatedFields:window.length,omittedFields:Math.max(0,all.length-window.length),readyAreaM2,requiredTasks:rollout.metrics.requiredTasks,missingTasks:rollout.metrics.missingTasks,personHours:rollout.metrics.personHours,reserved:false as const,approvalRequired:true as const};
+ return {...current,id:integratedHash({evaluation:current.id,horizon}),metrics:{...current.metrics,horizonReadyAreaM2:readyAreaM2},horizon};
 }
 export type JointEvaluation=Awaited<ReturnType<typeof evaluateJointProposal>>;
 export type JointMetrics=JointEvaluation['metrics'];
 const modelField=(f:JointField,snapshot:Pick<JointSnapshot,'fields'|'sources'>)=>{
  const context=jointFieldContext(snapshot,f);
  const source=snapshot.sources.find(s=>s.scopeId===f.centerId)!;
- return {id:f.id,center:f.centerId,conditions:context.conditions,neighborhood:context.neighborhood,options:f.options.map(o=>({id:o.id,crop:o.crop,score:o.coordination?.baseScore??o.score,ready:o.ready,start:o.plan.cultivation.start,end:o.plan.cultivation.end,area:o.plan.plan.plots.reduce((n,p)=>n+p.area,0),required:o.plan.plan.plots.flatMap(p=>p.tasks.filter(t=>t.kind==='PROCESS'||t.kind==='REPEAT')).length,machines:[...new Set(o.plan.plan.plots.flatMap(p=>p.tasks.flatMap(t=>t.requirements.machineCode?[t.requirements.machineCode]:[])))],...context.option(o),economics:economicModelFacts(optionEconomics(source,o))}))};
+ return {id:f.id,center:f.centerId,conditions:context.conditions,neighborhood:context.neighborhood,options:f.options.map(o=>({id:o.id,crop:o.crop,personHours:Math.round(o.plan.dispatch.assignments.reduce((n,a)=>n+a.staff*a.durationMinutes/60,0)*100)/100,...(o.plan.plan.context.variety?{variety:{id:o.plan.plan.context.variety.id,status:o.plan.plan.context.variety.status}}:{}),score:o.coordination?.baseScore??o.score,ready:o.ready,start:o.plan.cultivation.start,end:o.plan.cultivation.end,area:o.plan.plan.plots.reduce((n,p)=>n+p.area,0),required:o.plan.plan.plots.flatMap(p=>p.tasks.filter(t=>t.kind==='PROCESS'||t.kind==='REPEAT')).length,machines:[...new Set(o.plan.plan.plots.flatMap(p=>p.tasks.flatMap(t=>t.requirements.machineCode?[t.requirements.machineCode]:[])))],...context.option(o),economics:economicModelFacts(optionEconomics(source,o))}))};
 };
 // Only opaque IDs and aggregates leave the server. No PNU, address, contact,
 // consultation, named operator, free-form source text or document is sent.
 export function jointModelInput(snapshot:JointSnapshot,baseline:JointEvaluation){
  return {version:INTEGRATED_PLAN_VERSION,coverage:'PARTICIPATING_ONLY',remaining:snapshot.remaining,
+  regional:(()=>{const r=regionalPortfolio(snapshot);return {scope:r.scope,jointlyScheduled:false,remainingFields:r.remainingFields,remainingGroups:r.remainingGroups.slice(0,10),omittedGroups:r.remainingGroupsOmitted+Math.max(0,r.remainingGroups.length-10),limits:r.limits.slice(0,6).map((l,i)=>({id:`L${i+1}`,commodity:l.commodity,from:l.from,to:l.to,mode:l.mode,maxKg:l.maxKg,remainingKg:l.remainingKg,status:l.status})),omittedLimits:Math.max(0,r.limits.length-6)}})(),
   fields:snapshot.fields.map(f=>modelField(f,snapshot)),
-  centers:snapshot.sources.map(s=>({id:s.scopeId,fields:s.fields.length,machines:s.state?.machines.filter(m=>!m.ownerCenterId||m.ownerCenterId===s.scopeId).length??0,registeredStaff:s.state?.staffCount??0,neighbors:s.state?.centerSharing?.neighborCenterIds??[]})),
+  centers:snapshot.sources.map(s=>({id:s.scopeId,fields:s.fields.length,machines:s.state?.machines.filter(m=>!m.ownerCenterId||m.ownerCenterId===s.scopeId).length??0,registeredStaff:s.state?.staffCount??0,...(s.state?.permanentWorkforce?{workforce:{registeredPeople:s.state.permanentWorkforce.registeredPeople,permanentPeople:s.state.permanentWorkforce.workers.length,ordinaryWorkers:s.state.crewCapacity?.workers,operators:s.state.crewCapacity?.operators,attendanceConfirmed:false}}:{}),neighbors:s.state?.centerSharing?.neighborCenterIds??[]})),
   nationalBackground:[...new Set(snapshot.fields.flatMap(f=>f.options.map(o=>o.crop)))].map(crop=>{
    const source=snapshot.sources[0],selected=selectNationalReferences(crop,source.today,source.coordination.policy.nationalReferences??[]);
    return {crop,status:selected.status,scope:selected.scope,observations:selected.references.slice(0,3).map(r=>({reference:integratedHash(r).slice(0,16),commodity:r.commodity,asOf:r.asOf,period:r.observationPeriod,harvestPeriod:r.harvestPeriod,origin:r.origin,unit:r.unit,priceStage:r.priceStage,facts:r.facts})),remaining:Math.max(0,selected.references.length-3)};

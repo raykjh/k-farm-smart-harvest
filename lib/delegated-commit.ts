@@ -6,11 +6,13 @@ import {appendAssignments,type delegatedProposal} from './delegated-planning';
 import {syncChangedPlanReservations} from './plan-reservation-sync';
 import {plannedLaborDemand} from './planned-labor-demand';
 import {applyRegistrationOrigins} from './registration-origin';
+import {assertDelegatedProductionBounds} from './production-approval-limits';
 const json=(v:unknown)=>JSON.parse(JSON.stringify(v)) as Prisma.InputJsonValue;
 /** Caller locks center and field inventory, revalidates proposal and authority. */
 export async function commitDelegatedPlans(tx:Prisma.TransactionClient,input:{state:State;fields:FieldEntry[];version:number;plans:Awaited<ReturnType<typeof delegatedProposal>>['plans'];names:Record<string,string>;proposalId:string;actor:string;today:string}){
  const {plans,proposalId,actor,today}=input;
  if(!plans.length||plans.some(p=>!p.dispatch.assignments.length||!p.dispatch.feasibility.length||p.dispatch.feasibility.some(f=>f.status!=='CAPACITY_FEASIBLE')))throw Error('필수 작업 배치가 완료된 계획만 확정할 수 있습니다.');
+ await assertDelegatedProductionBounds(tx,plans,today);
  let next=structuredClone(input.state);const fields=structuredClone(input.fields),version=input.version+1,farmerIds=new Set<string>();
  for(const row of plans){
   const field=fields.find(f=>f.pnu===row.cultivation.pnu);

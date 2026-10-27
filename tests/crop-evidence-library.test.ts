@@ -33,7 +33,7 @@ it('keeps the reviewed bundle within the paid request contract through three cal
 });
 it('provides reproducible read-only defaults while preserving explicit empty overrides and stored payloads',async()=>{
  const saved=emptyCoordinationPolicy(),before=JSON.stringify(saved);let writes=0;
- const tx={workRecord:{findUnique:async()=>({payload:saved,version:7}),findMany:async()=>[],create:async()=>{writes++},update:async()=>{writes++}}};
+ const tx={center:{findMany:async()=>[{id:'demo'}]},workRecord:{findUnique:async()=>({payload:saved,version:7}),findMany:async()=>[],create:async()=>{writes++},update:async()=>{writes++}}};
  const a=await readProductionCoordination(tx as any,'demo','2026-10-20');
  const b=await readProductionCoordination(tx as any,'demo','2026-10-20');
  expect(a).toEqual(b);expect(a.policy.nationalReferences).toHaveLength(22);expect(a.policy.targets).toEqual([]);expect(a.policy.economicReferences).toBeUndefined();

@@ -12,6 +12,7 @@ export const MAX_REQUEST_RESERVATION_MICRO_USD=500_000; // User-approved per-cal
 export const DEVELOPMENT_PRIMARY_CEILING_MICRO_USD=10_000_000;
 export const MAX_PLANNING_OUTPUT_TOKENS=131_072;
 export const JOINT_PLAN_OUTPUT_TOKENS=32_768;
+export const PLANNING_REQUEST_TIMEOUT_MS=120_000;
 // Rates rechecked on the official public model page on 2026-10-19 (not balance).
 // https://nebius.com/services/token-factory/models/nvidia-nemotron-models-inference
 // Bounded judging-period review, not a price/uptime guarantee or extra allowance.
@@ -56,7 +57,8 @@ export function validateRequest(body:Record<string,unknown>,profile:AiRequestPro
  if(body.reasoning_effort!==undefined&&body.reasoning_effort!=='none'&&!(profile!=='production'&&body.reasoning_effort==='low'))throw new Error('Unreviewed reasoning budget');
  const allowed=['model','messages','tools','tool_choice','max_tokens','temperature','top_p','seed','n','stream','reasoning_effort'];
  if(Object.keys(body).some(k=>!allowed.includes(k)))throw new Error('Unreviewed AI request parameter');
- if(Buffer.byteLength(JSON.stringify(body),'utf8')>16_000)throw new Error('AI request exceeds conservative input budget');
+ const requestBytes=Buffer.byteLength(JSON.stringify(body),'utf8');
+ if(requestBytes>16_000)throw new Error(`AI request exceeds conservative input budget (${requestBytes}/16000 bytes)`);
 }
 
 export function reservationMicroUsd(body:Record<string,unknown>,profile:AiRequestProfile='production'){
@@ -120,7 +122,7 @@ export async function budgetedCompletion(body:Record<string,unknown>,purpose?:Ai
  let response:Response;
  try{response=await fetch('https://api.tokenfactory.nebius.com/v1/chat/completions',{
   method:'POST',headers:{Authorization:`Bearer ${process.env.NEBIUS_API_KEY}`,'Content-Type':'application/json'},
-  body:JSON.stringify(body),signal:AbortSignal.timeout(45000),redirect:'error',
+  body:JSON.stringify(body),signal:AbortSignal.timeout(profile==='planning'?PLANNING_REQUEST_TIMEOUT_MS:45000),redirect:'error',
  });}catch{throw new Error('Nebius connection failed; reserved budget retained. No automatic retry.');}
  if(!response.ok){await db.aiCall.update({where:{id},data:{status:`HTTP_${response.status}`}});throw new Error(`Nebius request failed (${response.status}); reserved budget retained`);}
  const payload=await response.json();
