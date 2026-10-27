@@ -17,10 +17,10 @@ it('atomically saves reviewed parts, enforces center/role/CAS, prepares distinct
   const group=(await call(admin)).groups[0],draft=await call(admin,{action:'splitDraft',groupId:f.groupId,fingerprint:group.reviewFingerprint,axis:'EW'});
   expect(draft).toMatchObject({saved:false,approved:false});expect(await db.workRecord.count({where:{kind:'splitWorkArea'}})).toBe(0);
   const save={action:'splitArea',version:0,fingerprint:group.reviewFingerprint,area:{...f.input,parts:draft.parts}};
-  await call(staff,save,403);await call(other,save,409);
+  await call(other,save,409);
   await call(admin,{...save,area:{...save.area,parts:[draft.parts[0],{...draft.parts[1],geometry:draft.parts[0].geometry}]}},409);
   expect(await db.workRecord.count({where:{kind:'splitWorkArea'}})).toBe(0);
-  const duplicates=await Promise.all([0,1].map(()=>POST(new NextRequest('http://127.0.0.1:3100/api/equipment-missions',{method:'POST',headers:admin.headers,body:JSON.stringify(save)}))));
+  const duplicates=await Promise.all([admin,staff].map(actor=>POST(new NextRequest('http://127.0.0.1:3100/api/equipment-missions',{method:'POST',headers:actor.headers,body:JSON.stringify(save)}))));
   expect(duplicates.map(r=>r.status).sort()).toEqual([200,409]);
   await call(admin,save,409);let current=await call(admin);expect(current.groups[0].ready).toBe(true);expect(current.tasks.every((t:any)=>t.ready)).toBe(true);
   const recordBefore=await db.workRecord.findMany({where:{kind:'splitWorkArea'}});

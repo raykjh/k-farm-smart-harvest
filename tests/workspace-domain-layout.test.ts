@@ -15,7 +15,8 @@ it('keeps operational domains and reference libraries without a duplicate produc
  expect(managed).toContain('AI 계획·일괄 확정');
  expect(managed).toContain('<FieldManagement');
  expect(managed).toContain('<ContinuousProductionPanel');
- expect(dashboard).toContain("equipmentTab==='reservations'&&<Reservations embedded");
+ expect(dashboard).not.toContain("equipmentTab==='reservations'");
+ expect(source('components/equipment-register.tsx')).toContain('<EquipmentSchedule machineId={selected.id}');
  expect(dashboard).not.toContain('<CenterSettings section="labor"');
  expect(dashboard).not.toContain('<CenterSettings section="equipment"');
  expect(dashboard).toContain('<OperatingRecords/>');

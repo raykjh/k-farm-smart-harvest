@@ -45,10 +45,12 @@ it('closes tasks atomically, releases bookings and labor, retains snapshots and 
  expect(()=>makeContract(saved,{ids:['cancel-test-0']},{status:'NOT_CONFIGURED',points:[]} as any,'2026-09-22')).toThrow('미완료');
 });
 it('requires authority, version and explicit no-work confirmation',async()=>{
- expect((await call(body(),staff.headers)).status).toBe(403);
+ expect((await POST(new NextRequest('http://127.0.0.1:3100/api/task-cancellations',{method:'POST',body:JSON.stringify(body())}))).status).toBe(401);
+ expect((await call({...body(),expectedPlanVersion:0},staff.headers)).status).toBe(409);
  expect((await call({...body(),expectedPlanVersion:0})).status).toBe(409);
  expect((await call({...body(),unperformedConfirmed:false})).status).toBe(409);
  expect((await db.center.findUniqueOrThrow({where:{id:'demo'}})).state).toEqual(fixture());
+ expect((await call(body(),staff.headers)).status).toBe(200);
 });
 it('keeps the last reserved date when closing a task after booking release',async()=>{
  const s=fixture();s.missions[0].originalScheduledDate='2099-04-20';

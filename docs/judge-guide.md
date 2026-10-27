@@ -1,10 +1,10 @@
 # K-Farm Judge Quick Start
 
-[Open the public app](https://kfarm.1gaji.com) · [Watch the retained 2:58 video](https://youtu.be/YRUgkQJirLM) · [Devpost submission](https://devpost.com/software/k-farm-smart-harvest)
+[Open the public app](https://kfarm.1gaji.com) · [Watch the current 2:58 video](https://youtu.be/owk6Hm48ITs) · [Devpost submission](https://devpost.com/software/k-farm-smart-harvest)
 
 K-Farm connects crop decisions to the work needed to carry them out through local agricultural support centers. This guide follows the submitted application: register a field, provide its conditions, let AI evaluate crop options, apply the plan, and inspect the saved changes.
 
-This guide was updated for the October 27 crop-planning release, application commit 1bc233baa9c6b28c2ac18a28fcc09bed72657e4f; see the [release record](judge-operations.md) for activation details. The existing screens and test inputs are retained, and the public database remains writable. The linked October 21 video predates this AI revision; its tractor/drone image illustrates future work, not connected hardware. Replacement filming and Devpost wording await owner review.
+This guide follows the October 27 crop-planning release, application commit 1bc233baa9c6b28c2ac18a28fcc09bed72657e4f; see the [final freeze record](submission-freeze.md). The existing screens and test inputs are retained, and the public database remains writable. The linked October 28 video shows the public application and separately dated October 27 validation evidence. No new model call or approval was performed during filming. Generated tractor/drone imagery illustrates future work, not connected hardware. The video and revised Devpost wording have been published after owner review.
 
 ## 1. Sign in and look around
 

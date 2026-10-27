@@ -44,11 +44,11 @@ it('leaves an unselected parcel pending, then saves a staff-selected crop, sched
  }finally{await staff.cleanup();await other.cleanup();await fixture.cleanup()}
 },60000);
 
-it('permits center crop work without granting account, report-finalization or global authority',()=>{
+it('permits center crop and work-record duties without granting account or global authority',()=>{
  const staff={...testPrincipal,role:'CENTER_STAFF' as const};
  expect(permitted(staff,'cultivations','POST',{})).toBe(true);
  expect(permitted(staff,'annual-dispatch','POST',{})).toBe(true);
- expect(permitted(staff,'execution-records','POST',{kind:'snapshot'})).toBe(false);
+ expect(permitted(staff,'execution-records','POST',{kind:'snapshot'})).toBe(true);
  expect(permitted(staff,'accounts','POST',{})).toBe(false);
  expect(permitted({...staff,centerId:null},'cultivations','POST',{})).toBe(false);
  expect(permitted({...staff,role:'SUPER_ADMIN',centerId:null},'cultivations','POST',{})).toBe(false);

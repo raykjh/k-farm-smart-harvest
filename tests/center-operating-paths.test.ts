@@ -13,8 +13,8 @@ it('uses each saved center grid, not the legacy grid; unset centers stay unset',
  mocks.find.mockImplementation(async({where})=>({payload:{location:where.workspace_kind_id.workspace==='center:janggye'?{nx:73,ny:76}:null}}));
  expect(await inCenter('janggye',()=>readCenterWeatherConfig())).toMatchObject({nx:'73',ny:'76'});
  expect(await inCenter('gyenam',()=>readCenterWeatherConfig())).toMatchObject({nx:undefined,ny:undefined});
- for(const route of ['replanning','annual-dispatch','environment-plan']){
-  const text=readFileSync(new URL(`../app/api/${route}/route.ts`,import.meta.url),'utf8');
+ for(const path of ['lib/replanning-service.ts','app/api/annual-dispatch/route.ts','app/api/environment-plan/route.ts']){
+  const text=readFileSync(new URL('../'+path,import.meta.url),'utf8');
   expect(text).toContain('readShortForecast(await readCenterWeatherConfig())');expect(text).not.toContain('process.env.KMA_GRID_NX');
  }
 });

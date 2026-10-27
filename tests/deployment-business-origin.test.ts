@@ -38,7 +38,8 @@ it('reaches all formerly loopback-only mutation validators at the canonical orig
  try{
   for(const [path,load] of Object.entries(loaders)){
    const route=await load(),session=path==='regional-crop-standards'?admin:center;
-   const request=(headers:Record<string,string>)=>new NextRequest(`http://127.0.0.1:3100/api/${path}`,{method:'POST',headers,body:JSON.stringify({action:'__origin_probe__'})});
+   const action=['replanning','task-schedule'].includes(path)?'preview':'__origin_probe__';
+   const request=(headers:Record<string,string>)=>new NextRequest(`http://127.0.0.1:3100/api/${path}`,{method:'POST',headers,body:JSON.stringify({action})});
    const good=await route.POST(request({...session.headers,origin,host}));
    expect(path==='demo'?[410]:[400,409],path+': '+await good.text()).toContain(good.status);
    const bad=await route.POST(request({...session.headers,host,origin:'https://evil.invalid','x-forwarded-host':host}));expect(bad.status,path).toBe(403);

@@ -46,6 +46,6 @@ it('ranks confirmed neighbors after local attendees; prevents cross-center overl
   throw Error('ROLLBACK_LABOR_SHARING');
  },{timeout:30000})).rejects.toThrow('ROLLBACK_LABOR_SHARING');
 });
-it('scopes writes to center administrators and never lets a center staff account share people or issue equipment packets',()=>{
- for(const p of ['labor-sharing','equipment-missions']){expect(permitted(testPrincipal,p,'POST',{})).toBe(true);expect(permitted({...testPrincipal,role:'CENTER_STAFF'},p,'POST',{})).toBe(false);expect(permitted({...testPrincipal,role:'SUPER_ADMIN',centerId:null},p,'GET',{})).toBe(false);}
+it('allows both center roles to manage people and equipment while retaining center boundaries',()=>{
+ for(const p of ['labor-sharing','equipment-missions']){expect(permitted(testPrincipal,p,'POST',{})).toBe(true);expect(permitted({...testPrincipal,role:'CENTER_STAFF'},p,'POST',{})).toBe(true);expect(permitted({...testPrincipal,role:'CENTER_STAFF',centerId:'unknown'},p,'POST',{})).toBe(false);expect(permitted({...testPrincipal,role:'SUPER_ADMIN',centerId:null},p,'GET',{})).toBe(false);}
 });

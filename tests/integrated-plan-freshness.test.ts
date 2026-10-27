@@ -106,7 +106,12 @@ it('a later center approval invalidates an earlier staged bundle, and recomputat
  expect((await inCenter('janggye',()=>approveProduction(tx,second.approval,'freshness-tester'))).alreadyApplied).toBe(true);
  expect(await persisted(tx)).toEqual(before);
  // Diverging versions of the same committed cultivation fail closed.
- const conflicting=structuredClone(snapshot);conflicting.sources[1].coordination.contributions[0].kg!.low+=1;
+ const conflicting=structuredClone(snapshot);
+ // The source reader intentionally shares one consistent national read across
+ // centers. Detach this center before constructing a genuinely divergent input.
+ conflicting.sources[1].coordination={...conflicting.sources[1].coordination,contributions:structuredClone(conflicting.sources[1].coordination.contributions)};
+ conflicting.sources[1].coordination.contributions[0].kg!.low+=1;
+ expect(conflicting.sources[0].coordination.contributions[0]).toEqual(snapshot.sources[0].coordination.contributions[0]);
  await expect(evaluateJointProposal(conflicting,proposal)).rejects.toThrow('기준이 다릅니다');
 }),120000);
 

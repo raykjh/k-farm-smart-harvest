@@ -15,8 +15,8 @@ it('migrates reviewed identities atomically, preserves previous rows and require
   const before=await db.workRecord.findMany({where:{kind:'resourceReservation'},orderBy:{id:'asc'}});
   const group=(await call(admin)).legacyGroups[0];expect(group.editable).toBe(true);
   const b={action:'linkLegacyParts',review:{key:group.key,fingerprint:group.fingerprint,note:'격리 검증: 승인 작업량과 회차 확인',confirmed:true,parts:f.parts.map(m=>({missionId:m.id,workAreaM2:5000,setupMinutes:60}))}};
-  await call(staff,b,403);await call(foreign,b,409);
-  const results=await Promise.all([0,1].map(()=>POST(new NextRequest('http://127.0.0.1:3100/api/equipment-missions',{method:'POST',headers:admin.headers,body:JSON.stringify(b)}))));
+  await call(foreign,b,409);
+  const results=await Promise.all([admin,staff].map(actor=>POST(new NextRequest('http://127.0.0.1:3100/api/equipment-missions',{method:'POST',headers:actor.headers,body:JSON.stringify(b)}))));
   expect(results.map(r=>r.status).sort()).toEqual([200,409]);
   const next=await call(admin);expect(next.legacyGroups).toEqual([]);expect(next.groups).toHaveLength(1);expect(next.groups[0].ready).toBe(false);
   expect(await db.workRecord.findMany({where:{kind:'resourceReservation'},orderBy:{id:'asc'}})).toEqual(before);

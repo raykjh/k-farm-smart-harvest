@@ -6,11 +6,11 @@ This is an **operational MVP and a policy proposal**, not an adopted government 
 
 ## Judge Quick Start
 
-Open the [public application](https://kfarm.1gaji.com), follow the **[English Judge Quick Start](docs/judge-guide.md)**, or watch the **[retained 2:58 submission video](https://youtu.be/YRUgkQJirLM)**.
+Open the [public application](https://kfarm.1gaji.com), follow the **[English Judge Quick Start](docs/judge-guide.md)**, or watch the **[2:58 submission video](https://youtu.be/owk6Hm48ITs)**.
 
 The guide covers prefilled sign-in, saved-record inspection, **ten fictional applicant/parcel examples**, required field conditions, AI crop-plan application and the screens that change afterward. Use **2027** for next-season schedules and national totals. Begin with one example; results depend on the current shared records and available resources.
 
-The October 27 crop-planning release is application commit `1bc233baa9c6b28c2ac18a28fcc09bed72657e4f`, deployed as `kfarm-judge-web:20261027-ai-r1` for web and operations. See the [release record](docs/judge-operations.md) for source verification and data-preservation checks. The October 21 submission tag remains unchanged and recoverable. The database stays open for normal judge testing. The linked video is the retained October 21 recording; it does not show the later October 27 validation campaign. Devpost wording and replacement filming are awaiting owner review.
+The October 27 crop-planning release is application commit `1bc233baa9c6b28c2ac18a28fcc09bed72657e4f`, deployed as `kfarm-judge-web:20261027-ai-r1` for web and operations. See the [release record](docs/judge-operations.md) for source verification and data-preservation checks. The October 21 submission tag remains unchanged and recoverable. The database stays open for normal judge testing. The current submission video was recorded in the public application on October 28, 2026 and published after owner review. It shows saved application records and separately dated October 27 validation evidence; no new model call or approval was performed during filming. Devpost embeds this video and its recording description matches that scope.
 
 ## Capabilities
 
@@ -200,11 +200,11 @@ During screen refinement, existing demo history is preserved, not retrospectivel
 
 This source release contains the application, calculation engine, database schema, synthetic tests and installation instructions under Apache-2.0. It excludes actual API keys, operating databases, personal records, cached provider datasets, raw model logs and internal development handoffs. [Publication and data scope](docs/public-source-and-data.md) explains the boundary.
 
-The [Devpost entry](https://devpost.com/software/k-farm-smart-harvest), [current English video](https://youtu.be/YRUgkQJirLM) and [NAS-hosted judge environment](https://kfarm.1gaji.com) use the October 21 application baseline. Development and published source were compared across all 917 released files before filming; runtime code matched the deployed source manifest. The video contains no older isolated-application footage. This does not expose the development PC or establish a field-production service.
+The [Devpost entry](https://devpost.com/software/k-farm-smart-harvest), [current English video](https://youtu.be/owk6Hm48ITs) and [NAS-hosted judge environment](https://kfarm.1gaji.com) reflect the October 27 crop-planning release. The October 28 video uses the public application and presents the separately dated validation evidence; it does not show a new model call or approval during filming. Both running application processes were rechecked against the 909-file release manifest on October 28. This does not expose the development PC or establish a field-production service.
 
-The current runtime is `kfarm-judge-web:20261021-r1` for both NAS web and background workers. The final submission baseline is retained as the `judge-submission-20261021-r1` release tag. Source-only installation/build checks, isolated browser tests and live NAS model/storage evidence are distinct checks, documented in [verification](docs/verification.md). Normal operational database records remain live; future development must not replace the fixed judging code or media. Maintain the NAS, provider connections and bounded AI allowance through judging as described in the [judge operations checklist](docs/judge-operations.md).
+The current runtime is `kfarm-judge-web:20261027-ai-r1` for both NAS web and background workers. The final submission is retained at `judge-submission-20261028-final`; the October 21 tag remains a historical rollback reference. See the [final freeze record](docs/submission-freeze.md) for the fixed source, image and video. Source-only installation/build checks, isolated browser tests and live NAS model/storage evidence are distinct checks, documented in [verification](docs/verification.md). Normal operational database records remain live; future development must not replace the fixed judging code or media. Maintain the NAS, provider connections and bounded AI allowance through judging as described in the [judge operations checklist](docs/judge-operations.md).
 
-The [official rules](https://nebiusglobalaihackathon.devpost.com/rules) govern submission. The deadline rechecked on 2026-10-19 is October 30 at 10:00 AM PDT, or **October 31 at 02:00 KST**. The stated judging period ends **December 16 at 05:00 KST**.
+The [official rules](https://nebiusglobalaihackathon.devpost.com/rules) govern submission. The deadline rechecked on 2026-10-28 is October 30 at 10:00 AM PDT, or **October 31 at 02:00 KST**. The stated judging period ends **December 16 at 05:00 KST**.
 
 ## License
 

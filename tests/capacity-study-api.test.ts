@@ -43,8 +43,8 @@ it('isolates center scope, versions baselines, rejects stale calculation/save, p
  });expect(await count()).toEqual(before);
  }finally{await db.workRecord.deleteMany({where:{workspace:'capacity-study:demo',OR:[{id},{id:{startsWith:id+':'}},{kind:'comparison',payload:{path:['baselineId'],equals:id}}]}})}
 });
-it('checks API auth/origin and staff cannot freeze baselines; input exports can be reimported',async()=>{
- const staff=await testSession('CENTER_STAFF'),admin=await testSession();let savedId='';
+it('checks API auth/origin and both center roles can save baselines; input exports can be reimported',async()=>{
+ const staff=await testSession('CENTER_STAFF'),admin=await testSession();let savedId='',staffSavedId='';
  // Replace only the optional local provider-file boundary, not business logic.
  const reader=vi.spyOn(artifacts,'requireProviderArtifact');
  const req=(headers:Record<string,string>,action:string,input:unknown)=>new NextRequest('http://127.0.0.1:3100/api/capacity-studies',{method:'POST',headers,body:JSON.stringify({action,input})});
@@ -57,7 +57,7 @@ it('checks API auth/origin and staff cannot freeze baselines; input exports can 
   const publicSample=await GET(new NextRequest('http://127.0.0.1:3100/api/capacity-studies?sample=four-centers-2026',{headers:staff.headers}));expect(publicSample.status).toBe(200);
   const sample=await POST(req(staff.headers,'analyze',await publicSample.json()));expect(sample.status,await sample.clone().text()).toBe(200);
   expect((await sample.json()).participation.selectedCount).toBe(33);
-  expect((await POST(req(staff.headers,'saveBaseline',{id:randomUUID(),expectedVersion:0,input:fixture()}))).status).toBe(403);
+  staffSavedId=randomUUID();expect((await POST(req(staff.headers,'saveBaseline',{id:staffSavedId,expectedVersion:0,input:fixture()}))).status).toBe(200);
   expect((await POST(req({...admin.headers,origin:'https://example.com'},'analyze',fixture()))).status).toBe(403);
   const analyzed=await POST(req(admin.headers,'analyze',fixture()));expect(analyzed.status).toBe(200);const d=await analyzed.json();
   expect(d.taskCount).toBe(9);expect(d.participation.selectedCount).toBe(1);
@@ -65,5 +65,5 @@ it('checks API auth/origin and staff cannot freeze baselines; input exports can 
   const again=await POST(req(admin.headers,'analyze',{input:d.input,resources:d.baseline}));expect(again.status).toBe(200);expect((await again.json()).baseline).toEqual(d.baseline);
   savedId=randomUUID();expect((await POST(req(admin.headers,'saveBaseline',{id:savedId,expectedVersion:0,input:fixture()}))).status).toBe(200);
   expect((await POST(req(admin.headers,'saveBaseline',{id:savedId,expectedVersion:0,input:fixture()}))).status).toBe(409);
- }finally{reader.mockRestore();await staff.cleanup();await admin.cleanup();if(savedId)await db.workRecord.deleteMany({where:{workspace:'capacity-study:demo',OR:[{id:savedId},{id:{startsWith:savedId+':'}}]}})}
+ }finally{reader.mockRestore();await staff.cleanup();await admin.cleanup();for(const id of [savedId,staffSavedId].filter(Boolean))await db.workRecord.deleteMany({where:{workspace:'capacity-study:demo',OR:[{id},{id:{startsWith:id+':'}}]}})}
 });
