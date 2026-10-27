@@ -10,7 +10,7 @@ Open the [public application](https://kfarm.1gaji.com), follow the **[English Ju
 
 The guide covers prefilled sign-in, saved-record inspection, **ten fictional applicant/parcel examples**, required field conditions, AI crop-plan application and the screens that change afterward. Use **2027** for next-season schedules and national totals. Begin with one example; results depend on the current shared records and available resources.
 
-The October 27 crop-planning release is application commit 1bc233baa9c6b28c2ac18a28fcc09bed72657e4f, prepared as kfarm-judge-web:20261027-ai-r1. See the [release record](docs/judge-operations.md) for public activation status. The October 21 submission tag remains unchanged and recoverable. The database stays open for normal judge testing. The linked video is the retained October 21 recording; it does not show the later October 27 validation campaign. Devpost wording and replacement filming are awaiting owner review.
+The October 27 crop-planning release is application commit `1bc233baa9c6b28c2ac18a28fcc09bed72657e4f`, deployed as `kfarm-judge-web:20261027-ai-r1` for web and operations. See the [release record](docs/judge-operations.md) for source verification and data-preservation checks. The October 21 submission tag remains unchanged and recoverable. The database stays open for normal judge testing. The linked video is the retained October 21 recording; it does not show the later October 27 validation campaign. Devpost wording and replacement filming are awaiting owner review.
 
 ## Capabilities
 
@@ -69,7 +69,7 @@ The paired comparisons used a frozen candidate before the final read/input/tool 
 
 ### October 20–21 release and paired comparison
 
-The hosted application baseline is source commit `5fa3e3415ba6e199bd5855744b8d0180b10ce34f`, running image `kfarm-judge-web:20261021-r1` for both web and operations. Korean/English inspection confirmed the revised national view: four participating centers, 301 cultivations and 53.3 hectares for 2027. The retained business snapshot has 301 fields and 1,791 planned tasks. Documentation changes after this code commit do not imply a new runtime image.
+The October 21 hosted application baseline was source commit `5fa3e3415ba6e199bd5855744b8d0180b10ce34f`, running image `kfarm-judge-web:20261021-r1` for both web and operations. Korean/English inspection confirmed the revised national view: four participating centers, 301 cultivations and 53.3 hectares for 2027. That retained business snapshot had 301 fields and 1,791 planned tasks; these historical counts are not the current shared database totals.
 
 Actual Nemotron calls selected **potato with suitable equipment available** (5 essential tasks, 10.75 person-hours) and **pepper when potato equipment was unavailable** (7 tasks, 24.75 person-hours) for the same 1,000 m² synthetic reviewed field. Both passed UI application, database storage and a new login in isolated local databases, using private NAS transport for actual inference and the existing ledger. Both matched the deterministic baseline. A rejected first attempt and unresolved labor remain visible in the [evidence](docs/ai-decision-evidence.md); this is not a new public-hosted end-to-end or profit-superiority claim.
 
