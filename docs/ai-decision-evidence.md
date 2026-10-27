@@ -2,9 +2,29 @@
 
 These are retained **actual NVIDIA Nemotron / Nebius Token Factory calls**, not scripted model responses. They use fictional applicants, resources and reviewed-condition assumptions. Each case names its date and execution environment. They establish bounded software behavior, not field productivity, a national production target or farm profitability.
 
-The [October 21 submission video](https://youtu.be/gq45y38CqxM) records the current public judge application. It presents the paired October 20 results below as a dated evidence table. It does not film the isolated test applications or portray their results as a fresh public-server execution.
+The retained [October 21 submission video](https://youtu.be/YRUgkQJirLM) records the October 21 public application. It predates the October 27 campaign below. No later local result is presented as an execution filmed in that video. Older video links identify earlier recordings.
 
-## Latest paired crop decision — October 20, 2026
+## Crop portfolio comparison and annual continuity — October 27, 2026
+
+Three prespecified synthetic cases made independent actual-model calls for an earlier local adviser and the improved candidate. The earlier local adviser was b31052d6aef4acee5a90b1d1dc325658390330e0; the candidate was 823ca8b99ace09ac0d118306e260da0854192432. Neither comparator is the October 21 public runtime. Fourteen calls were used for these comparisons.
+
+| Case | Earlier local adviser | Improved candidate | Classification |
+|---|---|---|---|
+| Combined production target and operator constraint; 3,100 m² | All pepper; 74.5 person-hours | Potato 1,600 m² + pepper 1,500 m²; 52 person-hours | 30.2% less calculated labor; essential omissions and hard-limit violations both zero |
+| Short operator shift; 3,800 m² | 63.75 person-hours | Same mix and 63.75 person-hours | Tie |
+| Loose four-field control; 3,450 m² | Dominated selection rejected | Valid all-potato plan, 43.25 person-hours | Recovery of validity; no numeric improvement claim against a rejected result |
+
+The final candidate 5b4e88b5d1359faab3e509b6cd42d824edc8dc8f added bounded reads, removed duplicate correction input and restricted selectable IDs to feasible alternatives when available. It retained every alternative in required evidence and preserved independent rejection checks. Recorded-response regression retained the compared selections. **A fresh independent paired campaign was not repeated on the last revision.** The public application source is imported at 1bc233baa9c6b28c2ac18a28fcc09bed72657e4f; private transport and machine-specific campaign scripts are excluded.
+
+The final candidate also completed actual-model annual planning on three normally registered synthetic fields in the retained database. In 2026 it saved 17 essential tasks, 45.75 calculated person-hours, and no missing essential work or hard-limit violations. Two failed draft attempts remained in the evidence; they were not approved. The 17 scheduled tasks were explicitly completed as DEMO_SIMULATION, with no actual-finish timestamps or real farm-work claim.
+
+Missing 2027 criteria blocked all three fields. After adding reviewed synthetic 2027 criteria, actual-model planning saved three all-potato cycles, 15 essential tasks and 31.75 calculated person-hours. Six cultivation records retained three prior-cycle links; no overlapping cycles or duplicate tasks were created. Earlier 23 records, 17 tasks and the 50,000-record load dataset remained unchanged. Optional in-season tasks remained unscheduled where conditions were unresolved. Two notices were recorded only.
+
+This annual check used normal registration/API handlers and application services with fresh logins per phase. It was not a new browser-driven approval run. A later release check reopened the saved 2026/2027 crop and work history through a fresh browser login. The annual comparison is continuity evidence, not proof that historic data caused an efficiency gain or that a real growing season was completed.
+
+Across the full campaign: **26 actual calls**, conservative reservation **$0.903746**, token-derived estimate **$0.012341**. These are different quantities and neither is a provider invoice. The private transport was closed afterward. [Sanitized structured results](../data/verification/crop-portfolio-20261027.json) contain the case metrics and evidence boundaries without credentials, private contacts, prompts or DB dumps.
+
+## Earlier paired crop decision — October 20, 2026
 
 The same 1,000 m² test field and reviewed-condition assumptions were evaluated in two isolated databases. Equipment availability was the intended changed input. The model called the calculation tool to assess alternatives before selecting a plan.
 

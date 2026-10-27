@@ -1,10 +1,10 @@
 # K-Farm Judge Quick Start
 
-[Open the public app](https://kfarm.1gaji.com) · [Watch the final 2:58 video](https://youtu.be/YRUgkQJirLM) · [Devpost submission](https://devpost.com/software/k-farm-smart-harvest)
+[Open the public app](https://kfarm.1gaji.com) · [Watch the retained 2:58 video](https://youtu.be/YRUgkQJirLM) · [Devpost submission](https://devpost.com/software/k-farm-smart-harvest)
 
 K-Farm connects crop decisions to the work needed to carry them out through local agricultural support centers. This guide follows the submitted application: register a field, provide its conditions, let AI evaluate crop options, apply the plan, and inspect the saved changes.
 
-The application release is fixed at `judge-submission-20261021-r1`; this guide is a later documentation-only update dated October 21, 2026. The public database remains writable for judge testing. The final video records this same public application; its tractor/drone concept image illustrates future work, not connected hardware.
+This guide was updated for the October 27 crop-planning release, application commit 1bc233baa9c6b28c2ac18a28fcc09bed72657e4f; see the [release record](judge-operations.md) for activation details. The existing screens and test inputs are retained, and the public database remains writable. The linked October 21 video predates this AI revision; its tractor/drone image illustrates future work, not connected hardware. Replacement filming and Devpost wording await owner review.
 
 ## 1. Sign in and look around
 
@@ -133,6 +133,6 @@ No harvest, shipment or completed-work total should rise merely because a plan w
 
 ## What this demonstrates
 
-The submitted system connects actual model decisions, calculation and validation, staff application/approval, and persistent crop/work/resource records. The reviewed comparisons matched the deterministic baseline; they do not establish superior optimization, a national optimum or a completed farming season. See the dated [AI decision evidence](ai-decision-evidence.md) and [verification record](verification.md) for the scope of earlier checks; older video links there identify earlier recordings.
+The system connects actual model decisions, calculation and validation, staff application/approval, and persistent crop/work/resource records. Earlier comparisons matched the deterministic baseline. Three October 27 comparisons against an earlier local AI adviser found one lower-labor crop mix, one tie and one recovery from a rejected selection. The final revision separately completed actual-model planning across simulated 2026 and 2027 seasons while preserving earlier records. These checks do not establish a national optimum or real farming results. See the dated [AI decision evidence](ai-decision-evidence.md) and [verification record](verification.md) for version and environment boundaries.
 
-Use fictional personal details. Real SMS, payroll, purchases and machine commands are not executed. The judge account cannot administer accounts or reset the dataset. Code, video and submission wording stay fixed while normal judge inputs and records can accumulate.
+Use fictional personal details. Real SMS, payroll, purchases and machine commands are not executed. The judge account cannot administer accounts or reset the dataset. The prior October 21 release tag remains immutable. Normal judge inputs and records can accumulate; a release does not reset the dataset or replenish the inference allowance.

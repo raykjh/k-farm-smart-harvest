@@ -1,0 +1,152 @@
+{
+  "date": "2026-10-27",
+  "publicApplicationCommit": "1bc233baa9c6b28c2ac18a28fcc09bed72657e4f",
+  "privateFinalCandidate": "5b4e88b5d1359faab3e509b6cd42d824edc8dc8f",
+  "comparison": {
+    "oldLocalAdviser": "b31052d6aef4acee5a90b1d1dc325658390330e0",
+    "candidate": "823ca8b99ace09ac0d118306e260da0854192432",
+    "cases": [
+      {
+        "id": "combined-yield-operator",
+        "family": "production-and-harvest",
+        "oldStatus": "VALIDATED",
+        "newStatus": "VALIDATED",
+        "oldValid": true,
+        "newValid": true,
+        "comparable": true,
+        "oldHours": 74.5,
+        "newHours": 52,
+        "reduction": 0.30201342281879195,
+        "oldArea": 3100,
+        "newArea": 3100,
+        "oldMix": [
+          {
+            "crop": "pepper",
+            "areaM2": 3100,
+            "share": 1
+          }
+        ],
+        "newMix": [
+          {
+            "crop": "potato",
+            "areaM2": 1600,
+            "share": 0.5161290322580645
+          },
+          {
+            "crop": "pepper",
+            "areaM2": 1500,
+            "share": 0.4838709677419355
+          }
+        ],
+        "classification": "NUMERIC_IMPROVEMENT",
+        "oldError": null,
+        "newError": null
+      },
+      {
+        "id": "short-operator-shift",
+        "family": "operator-hours",
+        "oldStatus": "VALIDATED",
+        "newStatus": "VALIDATED",
+        "oldValid": true,
+        "newValid": true,
+        "comparable": true,
+        "oldHours": 63.75,
+        "newHours": 63.75,
+        "reduction": 0,
+        "oldArea": 3800,
+        "newArea": 3800,
+        "oldMix": [
+          {
+            "crop": "potato",
+            "areaM2": 800,
+            "share": 0.21052631578947367
+          },
+          {
+            "crop": "pepper",
+            "areaM2": 3000,
+            "share": 0.7894736842105263
+          }
+        ],
+        "newMix": [
+          {
+            "crop": "potato",
+            "areaM2": 800,
+            "share": 0.21052631578947367
+          },
+          {
+            "crop": "pepper",
+            "areaM2": 3000,
+            "share": 0.7894736842105263
+          }
+        ],
+        "classification": "TIE",
+        "oldError": null,
+        "newError": null
+      },
+      {
+        "id": "loose-four-field-control",
+        "family": "feasible-control",
+        "oldStatus": "REJECTED",
+        "newStatus": "VALIDATED",
+        "oldValid": false,
+        "newValid": true,
+        "comparable": false,
+        "oldHours": null,
+        "newHours": 43.25,
+        "reduction": null,
+        "oldArea": null,
+        "newArea": 3450,
+        "oldMix": null,
+        "newMix": [
+          {
+            "crop": "potato",
+            "areaM2": 3450,
+            "share": 1
+          }
+        ],
+        "classification": "RECOVERY",
+        "oldError": "모든 운영 지표가 같거나 더 나은 계산 대안이 있습니다.",
+        "newError": null
+      }
+    ],
+    "scope": "Three prespecified synthetic old/new actual-model comparisons on 823ca8b. Final candidate also passed stored-response regression and actual annual flows; it has not repeated a fresh old/new independent campaign."
+  },
+  "scale": {
+    "cultivations": 50000,
+    "centers": 100,
+    "compiledTasks": 572784,
+    "compileAndStoreMs": 93383.68460000001,
+    "aggregateMs": 22798.4166,
+    "rssMiB": 405.953125,
+    "unchangedAcrossYear": true,
+    "sha256": "5be3a2879f443bbc3b5c64183784a112a156bd914621d44e5e7c72e341e24d6c",
+    "missingYieldReferences": 50000,
+    "paidModelCallsFor50000": 0,
+    "normalApprovalFor50000": false,
+    "limits": "Synthetic DRAFT load, compilation, storage and aggregation only. Not 50,000 individual AI approvals, concurrent users, physical farm results or national production optimization. Yield references remain unknown for these load records."
+  },
+  "annual": {
+    "fields": 3,
+    "cultivations": 6,
+    "previousCycleLinks": 3,
+    "completedSimulatedTasks2026": 17,
+    "newTasks2027": 15,
+    "missingNextYearCriteriaBlocked": 3,
+    "normalRegistration": true,
+    "actualModel2026": true,
+    "actualModel2027": true,
+    "oldRecordsUnchanged": 23,
+    "oldMissionsUnchanged": 17,
+    "noOverlap": true,
+    "noDuplicateMissions": true,
+    "realFieldCompletions": 0,
+    "originalCampaignBrowserUiTest": false
+  },
+  "cost": {
+    "actualCalls": 26,
+    "reservedUsd": 0.903746,
+    "tokenEstimateUsd": 0.012341,
+    "providerInvoice": false
+  },
+  "retainedReportSha256": "d65458dab5bf2d2681972c8930e6acc8222d220e6edecd4d44c2c7e27a3f04a5"
+}

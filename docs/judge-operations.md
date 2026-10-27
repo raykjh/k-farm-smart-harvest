@@ -19,13 +19,23 @@ Before judging, the owner must confirm an adequate remaining inference allowance
 5. Reopen the public site after restart. Old drafts must be marked stale when inputs change. An interrupted request must be recovered by its existing request ID, not blindly resubmitted. Duplicate processing must not add another charge or change.
 6. On failure, retain the prior known-good image and roll back application containers only. Preserve database volumes, secrets, ledger and ordinary accounts. Never reseed the filmed or judge database to make a failing demonstration appear successful.
 
-## Current release and submission freeze
+## October 27 application release
 
-The October 21 application baseline is public commit `5fa3e3415ba6e199bd5855744b8d0180b10ce34f` and image `kfarm-judge-web:20261021-r1` for both web and operations. Later documentation commits do not imply a different runtime. Retain the preceding image and private restore evidence.
+- Application source: 1bc233baa9c6b28c2ac18a28fcc09bed72657e4f.
+- New web/operations image: kfarm-judge-web:20261027-ai-r1.
+- Activation status: **PREPARED; deployment verification pending**. This line must be replaced with observed deployment evidence before describing the release as active.
+- Existing PostgreSQL schema, business volumes, accounts and canonical ledger are retained. No 50,000-record dataset is imported into the public app. Preserve the previous image and the October 21 release tag for rollback.
+- Before activation, custom-format dumps of kfarm_judge and kfarm_ai_ledger were written to private persistent NAS storage, hashed and inspected with pg_restore --list. This is same-volume backup evidence, not an offsite or full restore test.
+- The October 21 video YRUgkQJirLM and current Devpost story are intentionally unchanged. The owner will review revised wording before it is saved. New filming follows the activated public version and owner screen review.
+- Remaining cumulative development headroom at preflight: $0.381834. No allowance is created by this release. Keep saved-record checks separate from paid planning; adequate judge-period headroom still needs an explicit owner decision.
+
+## Historical October 21 release and submission freeze
+
+The retained October 21 application baseline is public commit `5fa3e3415ba6e199bd5855744b8d0180b10ce34f` and image `kfarm-judge-web:20261021-r1` for both web and operations. Later documentation commits do not imply a different runtime. Retain the preceding image and private restore evidence.
 
 The revised video and story were saved to Devpost on October 21; the entry remained **SUBMITTED, 5/5 steps done**, and the public page embedded the new video. Development and public source matched before filming; runtime code matched the deployment manifest. All new application footage was captured at `https://kfarm.1gaji.com`. The older isolated review apps were excluded and stopped after their protected records were verified unchanged.
 
-The final submission source is retained at [judge-submission-20261021-r1](https://github.com/raykjh/k-farm-smart-harvest/tree/judge-submission-20261021-r1). Treat this tag, the current image and the published media as the judging baseline. Future development continues separately and must not overwrite this release tag or replace the judging image/media without an explicit release decision. Normal operational database records, sessions and the canonical cost ledger remain live; the freeze is not a database rollback or a new inference allowance.
+The final submission source is retained at [judge-submission-20261021-r1](https://github.com/raykjh/k-farm-smart-harvest/tree/judge-submission-20261021-r1). The tag remains an immutable historical baseline. The owner explicitly authorized the October 27 application release above; the old tag must not be moved. Published media and Devpost wording remain subject to their separate review boundary. Normal operational database records, sessions and the canonical cost ledger remain live; the freeze is not a database rollback or a new inference allowance.
 
 | Release evidence | Fixed value |
 |---|---|
@@ -33,7 +43,7 @@ The final submission source is retained at [judge-submission-20261021-r1](https:
 | Web and operations image | `kfarm-judge-web:20261021-r1` |
 | Local Docker image ID | `sha256:d31090cd0a21afe3cfa7f68385af42bd7a5c6ffaa5e5900bf07193511a66d118` |
 | Deployed 917-file source manifest | `67ff2a0c45007dc976315c39d321b72132e15f5b234324e64a512fcabc5155ba` |
-| Current video | [176-second public recording](https://youtu.be/gq45y38CqxM) |
+| Earlier October 21 video | [176-second public recording](https://youtu.be/gq45y38CqxM) |
 | MP4 SHA-256 | `b619f4b456a30e57b05b94343378cb5ced434e962f0e30d4d823bb9e93b515ed` |
 | Filmed data snapshot | 2027: 4 centers, 301 cultivations, 53.3 ha; retained release snapshot: 301 fields / 1,791 planned tasks |
 

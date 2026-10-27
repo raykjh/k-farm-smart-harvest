@@ -6,11 +6,11 @@ This is an **operational MVP and a policy proposal**, not an adopted government 
 
 ## Judge Quick Start
 
-Open the [public application](https://kfarm.1gaji.com), follow the **[English Judge Quick Start](docs/judge-guide.md)**, or watch the **[final 2:58 submission video](https://youtu.be/YRUgkQJirLM)**.
+Open the [public application](https://kfarm.1gaji.com), follow the **[English Judge Quick Start](docs/judge-guide.md)**, or watch the **[retained 2:58 submission video](https://youtu.be/YRUgkQJirLM)**.
 
 The guide covers prefilled sign-in, saved-record inspection, **ten fictional applicant/parcel examples**, required field conditions, AI crop-plan application and the screens that change afterward. Use **2027** for next-season schedules and national totals. Begin with one example; results depend on the current shared records and available resources.
 
-The submitted application release remains `judge-submission-20261021-r1`. This guide/README update changes documentation only; the application, published video and Devpost wording are unchanged. The database stays open for normal judge testing.
+The October 27 crop-planning release is application commit 1bc233baa9c6b28c2ac18a28fcc09bed72657e4f, prepared as kfarm-judge-web:20261027-ai-r1. See the [release record](docs/judge-operations.md) for public activation status. The October 21 submission tag remains unchanged and recoverable. The database stays open for normal judge testing. The linked video is the retained October 21 recording; it does not show the later October 27 validation campaign. Devpost wording and replacement filming are awaiting owner review.
 
 ## Capabilities
 
@@ -38,7 +38,7 @@ NVIDIA `nvidia/Nemotron-3_5-Lightning`, served through **Nebius Token Factory**,
 | Authorize changes | The operator's bounded rescheduling command, with version and availability checks repeated before commit |
 | Record effects | PostgreSQL transaction, reservations, audit trail and notification outbox |
 
-The model cannot invent equipment, change work windows, authorize borrowing or execute a machine. No feasible candidate means no model call. Inspecting or refreshing saved records does not request inference; replaying an applied request reuses its result. **Field management → Apply AI plans** is an explicit staff command that runs actual model planning, validates the decision and commits eligible plans. The background intake draft path retains its separate confirmation. These checks demonstrate grounded decisions, not superiority over deterministic ranking or a national optimum.
+The model cannot invent equipment, change work windows, authorize borrowing or execute a machine. No feasible candidate means no model call. Inspecting or refreshing saved records does not request inference; replaying an applied request reuses its result. **Field management → Apply AI plans** is an explicit staff command that runs actual model planning, validates the decision and commits eligible plans. The background intake draft path retains its separate confirmation. The October 27 comparisons found one case with lower calculated labor, one tie and one recovered valid selection against the earlier local AI adviser. Those bounded results are distinct from earlier comparisons that matched the deterministic baseline, and do not establish a national optimum.
 
 The ordinary rescheduling screen needs a reason and an optional preferred date, not an AI checkbox or an alternative-selection workflow. It tries local vacancies, related local rearrangement and preauthorized adjacent equipment. A repair request first preserves each original workday with a compatible replacement. Model rationale stays in the audit record. If the available resources cannot satisfy the work window, a resource/condition request is saved; the system does not pretend that a purchase, worker attendance or farm work has occurred.
 
@@ -46,9 +46,28 @@ Equipment-to-manual conversion is disabled in ordinary rescheduling, including r
 
 After a connection interruption, **Check result** retrieves the saved request without another model call. A still-valid saved proposal can finish its approval after the old execution lease expires; otherwise the existing schedule is preserved and a separate new request is required. A failed delivery is not treated as a failed database commit.
 
-## Current verification
+## October 27 crop-planning improvement
 
-### Current release and paired comparison — 2026-10-20–21
+The operating concept is unchanged: AI helps local centers decide what to grow on entrusted fields, then connects those choices to work, people and shared resources. Staff resolve exceptions and retain authority over application and approval. This remains a working basis for a regional pilot and policy discussion.
+
+- The model assesses all evaluated alternatives. Bounded crop-combination search and a limited correction step help address infeasible or dominated selections; independent validation still rejects unsupported results.
+- Reviewed participant production limits, known remaining fields and configured variety/orchard conditions can constrain crop choices. These are scoped inputs, not an estimate of adequate national production.
+- Confirmed permanent working calendars and qualified operators determine available capacity. Registered headcount alone is not attendance. Persistent shortages leave review records, not purchase authorizations.
+- Linked cultivation cycles preserve earlier work. Comparable confirmed manual-work evidence can adjust estimates under minimum-sample and provenance checks; simulated and actual results remain separate.
+- Center/page-bounded reads support accumulated records without changing the screen layout or database schema.
+
+| Bounded check | Result |
+|---|---|
+| Same 3,100 m², combined production/operator constraints | Earlier local AI: 74.5 person-hours, all pepper; improved candidate: 52 hours, potato 1,600 m² + pepper 1,500 m². 30.2% less calculated labor in this case; no essential omissions or hard-limit violations. |
+| Other two prespecified comparisons | One tie; one rejected earlier selection recovered to a valid plan. |
+| 2026 → 2027 in the same retained DB | Three normally registered fields, six linked cultivation cycles, 17 simulated completions in 2026 and 15 new tasks in 2027. Missing next-year criteria blocked planning. Earlier records were preserved. |
+| 50,000 synthetic draft plans | 572,784 task drafts compiled/stored; aggregation 22.8 seconds in the tested local environment. No paid inference or approvals for those 50,000 records. |
+
+The paired comparisons used a frozen candidate before the final read/input/tool repairs. The final revision passed recorded-response regression and actual-model annual planning; it did not repeat a fresh full paired campaign. The 50,000 load records lacked yield references and do not establish national production coverage. Actual farming, profit gains and nationwide optimization remain unverified. See [versioned evidence](docs/ai-decision-evidence.md), [verification](docs/verification.md) and the [sanitized results](data/verification/crop-portfolio-20261027.json).
+
+## Dated earlier verification
+
+### October 20–21 release and paired comparison
 
 The hosted application baseline is source commit `5fa3e3415ba6e199bd5855744b8d0180b10ce34f`, running image `kfarm-judge-web:20261021-r1` for both web and operations. Korean/English inspection confirmed the revised national view: four participating centers, 301 cultivations and 53.3 hectares for 2027. The retained business snapshot has 301 fields and 1,791 planned tasks. Documentation changes after this code commit do not imply a new runtime image.
 
