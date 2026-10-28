@@ -21,11 +21,11 @@ it('removes the daily cap but atomically preserves the lifetime cap across concu
  expect(results.filter(r=>r.status==='fulfilled')).toHaveLength(8);
  expect((await db.aiBudget.findUniqueOrThrow({where:{id:'nebius-primary'}})).total).toBe(4_040_000);
  expect((await db.aiBudget.findUniqueOrThrow({where:{id:'nebius-primary'}})).daily).toBe(1_020_000);
- await db.aiBudget.update({where:{id:'nebius-primary'},data:{total:19_990_000,daily:1_000_000,day:new Date('2020-01-01')}});
+ await db.aiBudget.update({where:{id:'nebius-primary'},data:{total:27_990_000,daily:1_000_000,day:new Date('2020-01-01')}});
  const lifetime=await Promise.allSettled(Array.from({length:4},()=>reserveBudget(5000)));
  expect(lifetime.filter(r=>r.status==='fulfilled')).toHaveLength(2);
  await expect(reserveBudget(5000)).rejects.toThrow('exhausted');
- expect((await db.aiBudget.findUniqueOrThrow({where:{id:'nebius-primary'}})).total).toBe(20_000_000);
+ expect((await db.aiBudget.findUniqueOrThrow({where:{id:'nebius-primary'}})).total).toBe(28_000_000);
 });
 it('stops concurrent development calls at $10 and preserves the same history for judging',async()=>{
  vi.stubEnv('KFARM_AI_SPENDING_PHASE','development');
@@ -38,6 +38,19 @@ it('stops concurrent development calls at $10 and preserves the same history for
  vi.stubEnv('KFARM_AI_SPENDING_PHASE','judging');await reserveBudget(5000);
  expect((await db.aiBudget.findUniqueOrThrow({where:{id:'nebius-primary'}})).total).toBe(10_005_000);
  expect((await db.aiBudget.findUniqueOrThrow({where:{id:VALIDATION_BUDGET_ID}})).total).toBe(9_005_000);
+});
+it('serializes the expanded judging slice without losing the historical offset or bypassing a lower stop',async()=>{
+ vi.stubEnv('KFARM_AI_SPENDING_PHASE','judging');
+ vi.stubEnv('KFARM_AI_RESERVATION_CEILING_MICRO_USD','27000000');
+ await db.aiBudget.create({data:{id:'nebius-primary',total:27_990_000,daily:0,day:budgetDay}});
+ await db.aiBudget.create({data:{id:VALIDATION_BUDGET_ID,total:26_995_000,daily:0,day:budgetDay}});
+ const results=await Promise.allSettled(Array.from({length:4},()=>reserveBudget(5000)));
+ expect(results.filter(r=>r.status==='fulfilled')).toHaveLength(1);
+ expect((await db.aiBudget.findUniqueOrThrow({where:{id:'nebius-primary'}})).total).toBe(27_995_000);
+ expect((await db.aiBudget.findUniqueOrThrow({where:{id:VALIDATION_BUDGET_ID}})).total).toBe(27_000_000);
+ vi.stubEnv('KFARM_AI_RESERVATION_CEILING_MICRO_USD','10000000');
+ await expect(reserveBudget(5000)).rejects.toThrow('exhausted');
+ expect((await db.aiBudget.findUniqueOrThrow({where:{id:'nebius-primary'}})).total).toBe(27_995_000);
 });
 it('honors small reservations without deleting historical counters',async()=>{
  await db.aiBudget.create({data:{id:'nebius-primary',total:1_000_000,daily:990_000,day:budgetDay}});

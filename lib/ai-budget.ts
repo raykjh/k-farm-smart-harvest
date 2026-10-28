@@ -6,10 +6,15 @@ import {randomUUID} from 'node:crypto';
 export const APPROVED_MODEL='nvidia/Nemotron-3_5-Lightning';
 export const INPUT_USD_PER_MILLION=0.06;
 export const OUTPUT_USD_PER_MILLION=0.24;
-export const TOTAL_MICRO_USD=20_000_000; // Leave $5 of the verified $25 untouched.
+export const TOTAL_MICRO_USD=20_000_000; // Original account reservation policy; retained for development.
 export const DAILY_MICRO_USD=null; // Removed explicitly by the user on 2026-10-11.
 export const MAX_REQUEST_RESERVATION_MICRO_USD=500_000; // User-approved per-call ceiling, 2026-10-20.
 export const DEVELOPMENT_PRIMARY_CEILING_MICRO_USD=10_000_000;
+// Owner-approved judging expansion, 2026-10-28. Preserve the existing ledger:
+// $28 / $27 cumulative caps leave $18.381834 from the verified historical totals.
+// This is a conservative reservation allowance, not a provider balance or top-up.
+export const JUDGING_PRIMARY_CEILING_MICRO_USD=28_000_000;
+export const JUDGING_VALIDATION_CEILING_MICRO_USD=27_000_000;
 export const MAX_PLANNING_OUTPUT_TOKENS=131_072;
 export const JOINT_PLAN_OUTPUT_TOKENS=32_768;
 export const PLANNING_REQUEST_TIMEOUT_MS=120_000;
@@ -30,21 +35,22 @@ export type AiUsage={callId:string;reservedMicroUsd:number;promptTokens?:number;
 
 // Count all historical account reservations toward the development threshold.
 // Judging is an explicit server setting; no request body can select this phase.
-// Both phases still obey the existing decision slice and lifetime allowance.
+// Both phases obey their approved decision slice and cumulative allowance.
 export function effectivePrimaryCeiling(){
  const phase=process.env.KFARM_AI_SPENDING_PHASE||'development';
  if(phase==='development')return Math.min(TOTAL_MICRO_USD,DEVELOPMENT_PRIMARY_CEILING_MICRO_USD);
- if(phase==='judging')return TOTAL_MICRO_USD;
+ if(phase==='judging')return JUDGING_PRIMARY_CEILING_MICRO_USD;
  throw Error('Invalid AI spending phase');
 }
 
 // Optional server-side stop for a separately approved verification slice. It can
-// only LOWER the existing persistent ceiling, never reset or enlarge an allowance.
+// only LOWER the phase's approved ceiling, never reset ledger history.
 export function effectiveValidationCeiling(){
+ const approved=process.env.KFARM_AI_SPENDING_PHASE==='judging'?JUDGING_VALIDATION_CEILING_MICRO_USD:VALIDATION_MICRO_USD;
  const raw=process.env.KFARM_AI_RESERVATION_CEILING_MICRO_USD;
- if(raw===undefined||raw==='')return VALIDATION_MICRO_USD;
+ if(raw===undefined||raw==='')return approved;
  if(!/^\d+$/.test(raw)||!Number.isSafeInteger(Number(raw))||Number(raw)<1)throw Error('Invalid restricted AI reservation ceiling');
- return Math.min(VALIDATION_MICRO_USD,Number(raw));
+ return Math.min(approved,Number(raw));
 }
 
 export function validateRequest(body:Record<string,unknown>,profile:AiRequestProfile='production'){

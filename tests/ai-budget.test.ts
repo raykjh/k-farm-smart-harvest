@@ -11,8 +11,17 @@ describe('AI budget fail closed',()=>{
   mock.execute.mockResolvedValueOnce(0).mockResolvedValueOnce(1).mockResolvedValueOnce(0).mockResolvedValueOnce(1);
   mock.transaction.mockImplementation(fn=>fn({$executeRaw:mock.execute}));
   await reserveBudget(5000);expect(mock.execute.mock.calls[1]).toContain(10_000_000);
-  vi.stubEnv('KFARM_AI_SPENDING_PHASE','judging');expect(effectivePrimaryCeiling()).toBe(20_000_000);
+  vi.stubEnv('KFARM_AI_SPENDING_PHASE','judging');expect(effectivePrimaryCeiling()).toBe(28_000_000);
   vi.stubEnv('KFARM_AI_SPENDING_PHASE','typo');expect(()=>effectivePrimaryCeiling()).toThrow('Invalid');
+ });
+ it('allows the approved judging expansion only in judging phase and retains lower configured stops',()=>{
+  vi.stubEnv('KFARM_AI_RESERVATION_CEILING_MICRO_USD','27000000');
+  vi.stubEnv('KFARM_AI_SPENDING_PHASE','development');
+  expect(effectivePrimaryCeiling()).toBe(10_000_000);expect(effectiveValidationCeiling()).toBe(15_200_000);
+  vi.stubEnv('KFARM_AI_SPENDING_PHASE','judging');
+  expect(effectivePrimaryCeiling()).toBe(28_000_000);expect(effectiveValidationCeiling()).toBe(27_000_000);
+  vi.stubEnv('KFARM_AI_RESERVATION_CEILING_MICRO_USD','999999999');expect(effectiveValidationCeiling()).toBe(27_000_000);
+  vi.stubEnv('KFARM_AI_RESERVATION_CEILING_MICRO_USD','10000000');expect(effectiveValidationCeiling()).toBe(10_000_000);
  });
  it('permits enough planning output while retaining the per-call money cap and smaller diagnostic profile',async()=>{
   expect(JOINT_PLAN_OUTPUT_TOKENS).toBe(32768);
